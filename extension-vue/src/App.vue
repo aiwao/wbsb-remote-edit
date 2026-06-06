@@ -7,10 +7,6 @@ const STORAGE_KEYS = {
   autoConnect: "remote-edit-auto-connect",
   endpoint: "remote-edit-endpoint",
 };
-const DEBUG_ARTICLE = {
-  title: "ABCDEFG",
-  body: "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz",
-};
 
 const endpoint = ref(DEFAULT_ENDPOINT);
 const autoConnect = ref(false);
@@ -69,7 +65,9 @@ function handleMessage(event) {
   }
 
   if (message.type === "get_wbsb_article") {
-    sendWBSBArticle(message);
+    sendWBSBArticle(message).catch((error) => {
+      appendLog("extension", toErrorMessage(error));
+    });
   }
 
   if (message.type === "edit") {
@@ -89,8 +87,25 @@ function sendAck(message) {
   socket.send(JSON.stringify({ type: "ack", id: message.id }));
 }
 
-function sendWBSBArticle(message) {
+async function sendWBSBArticle(message) {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  let article;
+  try {
+    article = await readWBSBArticle();
+  } catch (error) {
+    const errorText = toErrorMessage(error);
+    appendLog("extension", errorText);
+    socket.send(
+      JSON.stringify({
+        type: "wbsb_article",
+        id: message.id,
+        error: errorText,
+        from: "extension",
+      }),
+    );
     return;
   }
 
@@ -98,15 +113,78 @@ function sendWBSBArticle(message) {
     JSON.stringify({
       type: "wbsb_article",
       id: message.id,
-      title: DEBUG_ARTICLE.title,
-      body: DEBUG_ARTICLE.body,
+      title: article.title,
+      body: article.body,
       from: "extension",
     }),
   );
+  appendLog("WBSB", article.title || "untitled article");
 }
 
 function toErrorMessage(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function extensionApi() {
+  return globalThis.browser || globalThis.chrome;
+}
+
+function queryActiveTab() {
+  const api = extensionApi();
+  if (!api?.tabs?.query) {
+    return Promise.reject(new Error("tabs API is unavailable"));
+  }
+
+  if (globalThis.browser?.tabs?.query) {
+    return api.tabs.query({ active: true, currentWindow: true }).then((tabs) => tabs[0]);
+  }
+
+  return new Promise((resolve, reject) => {
+    api.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const error = api.runtime?.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(tabs[0]);
+    });
+  });
+}
+
+function sendTabMessage(tabId, message) {
+  const api = extensionApi();
+  if (!api?.tabs?.sendMessage) {
+    return Promise.reject(new Error("tabs messaging API is unavailable"));
+  }
+
+  if (globalThis.browser?.tabs?.sendMessage) {
+    return api.tabs.sendMessage(tabId, message);
+  }
+
+  return new Promise((resolve, reject) => {
+    api.tabs.sendMessage(tabId, message, (response) => {
+      const error = api.runtime?.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+async function readWBSBArticle() {
+  const tab = await queryActiveTab();
+  if (!tab?.id) {
+    throw new Error("active tab is unavailable");
+  }
+
+  const response = await sendTabMessage(tab.id, { type: "read_wbsb_article" });
+  if (!response?.ok) {
+    throw new Error(response?.error || "could not read WBSB article");
+  }
+
+  return response.article;
 }
 
 function connect() {

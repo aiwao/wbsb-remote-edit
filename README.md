@@ -14,6 +14,8 @@ Before opening the editor, the CLI requests the current article from the extensi
 { "type": "get_wbsb_article", "from": "cli" }
 ```
 
+The Vue extension reads `get_wbsb_article` only from `*://wbsb.dev/articles/new`. It takes the title from the article title input and converts the article body HTML children to Markdown with Turndown.
+
 ## Run the CLI
 
 ```sh
@@ -58,7 +60,7 @@ nix develop --command web-ext lint --source-dir extension-vue/dist
 ## Browser Compatibility Notes
 
 - The extension uses Manifest V3 and avoids browser-specific JavaScript APIs in the popup.
-- `host_permissions` uses portless localhost match patterns so the same manifest works in Chrome and Firefox.
+- The content script and host permission are limited to `*://wbsb.dev/articles/new`.
 - The explicit `content_security_policy` allows `ws://localhost:*` and `ws://127.0.0.1:*`, which keeps Firefox from upgrading the local WebSocket endpoint to `wss://`.
 
 ## Useful Commands

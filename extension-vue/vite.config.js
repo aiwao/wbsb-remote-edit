@@ -14,7 +14,10 @@ export default defineConfig({
   build: {
     emptyOutDir: true,
     rollupOptions: {
-      input: "index.html",
+      input: {
+        content: "src/content.js",
+        index: "index.html",
+      },
       output: {
         entryFileNames: "assets/[name].js",
         assetFileNames: "assets/[name][extname]",
