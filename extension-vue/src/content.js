@@ -115,6 +115,90 @@ function insertEditorParagraph(editor) {
   dispatchTextInput(editor, "insertParagraph");
 }
 
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function markdownTokens(markdown) {
+  const tokens = [];
+  const fencePattern = /(^|\n)```([^\n`]*)\n([\s\S]*?)\n```[^\S\n]*(?=\n|$)/g;
+  let cursor = 0;
+  let match;
+
+  while ((match = fencePattern.exec(markdown))) {
+    const fenceStart = match.index + match[1].length;
+    if (cursor < fenceStart) {
+      tokens.push({ text: markdown.slice(cursor, fenceStart), type: "text" });
+    }
+
+    tokens.push({
+      code: match[3],
+      language: match[2].trim().split(/\s+/)[0] || "",
+      type: "code",
+    });
+    cursor = fencePattern.lastIndex;
+  }
+
+  if (cursor < markdown.length) {
+    tokens.push({ text: markdown.slice(cursor), type: "text" });
+  }
+
+  return tokens;
+}
+
+function hasLaterContent(tokens, index) {
+  return tokens.slice(index + 1).some((token) => {
+    if (token.type === "code") {
+      return true;
+    }
+    return token.text.replace(/\n/g, "").length > 0;
+  });
+}
+
+function consumeLeadingParagraphBreak(tokens, index) {
+  const nextToken = tokens[index + 1];
+  if (nextToken?.type === "text" && nextToken.text.startsWith("\n")) {
+    nextToken.text = nextToken.text.slice(1);
+  }
+}
+
+function pasteHtml(editor, html, plainText) {
+  editor.focus();
+
+  try {
+    const data = new DataTransfer();
+    data.setData("text/html", html);
+    data.setData("text/plain", plainText);
+
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: data,
+    });
+
+    if (!editor.dispatchEvent(event) || event.defaultPrevented) {
+      return;
+    }
+  } catch {
+    // Fall through to the execCommand fallback.
+  }
+
+  document.execCommand("insertHTML", false, html);
+  dispatchTextInput(editor, "insertFromPaste", plainText);
+}
+
+function insertCodeBlock(editor, token, shouldCreateFollowingParagraph) {
+  const languageClass = token.language ? ` class="language-${escapeHtml(token.language)}"` : "";
+  const followingParagraph = shouldCreateFollowingParagraph ? "<p><br></p>" : "";
+  const html = `<pre><code${languageClass}>${escapeHtml(token.code)}</code></pre>${followingParagraph}`;
+
+  pasteHtml(editor, html, token.code);
+}
+
 function waitForEditorTick(index) {
   if (index % 50 !== 0) {
     return Promise.resolve();
@@ -137,6 +221,24 @@ async function typeIntoEditor(editor, text) {
   }
 }
 
+async function typeMarkdownIntoEditor(editor, markdown) {
+  const tokens = markdownTokens(markdown);
+
+  for (const [index, token] of tokens.entries()) {
+    if (token.type === "text") {
+      await typeIntoEditor(editor, token.text);
+      continue;
+    }
+
+    const shouldCreateFollowingParagraph = hasLaterContent(tokens, index);
+    insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
+    if (shouldCreateFollowingParagraph) {
+      consumeLeadingParagraphBreak(tokens, index);
+    }
+    await waitForEditorTick(index);
+  }
+}
+
 function replaceEditorContentsWithText(editor, text) {
   editor.focus();
   selectNodeContents(editor);
@@ -149,7 +251,7 @@ function replaceEditorContentsWithText(editor, text) {
     return Promise.resolve();
   }
 
-  return typeIntoEditor(editor, text);
+  return typeMarkdownIntoEditor(editor, text);
 }
 
 function dispatchTitleInput(element, inputType = "insertText") {
