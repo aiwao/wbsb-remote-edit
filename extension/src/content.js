@@ -1,4 +1,5 @@
 import { articleBodyChildrenToMarkdown } from "./article-markdown.js";
+import { consumeCodeFenceSeparatorBreak, hasLaterContent } from "./editor-markdown.js";
 import { markdownTokens } from "./markdown-tokens.js";
 
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
@@ -134,22 +135,6 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function hasLaterContent(tokens, index) {
-  return tokens.slice(index + 1).some((token) => {
-    if (token.type !== "text") {
-      return true;
-    }
-    return token.text.replace(/\n/g, "").length > 0;
-  });
-}
-
-function consumeLeadingParagraphBreak(tokens, index) {
-  const nextToken = tokens[index + 1];
-  if (nextToken?.type === "text" && nextToken.text.startsWith("\n")) {
-    nextToken.text = nextToken.text.slice(1);
-  }
-}
-
 function pasteHtml(editor, html, plainText) {
   editor.focus();
 
@@ -247,7 +232,7 @@ async function typeMarkdownIntoEditor(editor, markdown) {
       insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
     }
     if (shouldCreateFollowingParagraph) {
-      consumeLeadingParagraphBreak(tokens, index);
+      consumeCodeFenceSeparatorBreak(tokens, index);
     }
     await waitForEditorTick(index);
   }
