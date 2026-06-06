@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Greet WebSocket Bridge",
+  "description": "Send names to the local greet-ws CLI and receive greetings.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Greet WS",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "ws://127.0.0.1:8787/*",
+    "ws://localhost:8787/*",
+    "http://127.0.0.1:8787/*",
+    "http://localhost:8787/*"
+  ]
+}
