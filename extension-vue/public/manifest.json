@@ -7,10 +7,11 @@
     "default_title": "Remote Edit",
     "default_popup": "index.html"
   },
-  "host_permissions": ["*://wbsb.dev/articles/new"],
+  "permissions": ["scripting"],
+  "host_permissions": ["*://wbsb.dev/articles/new*"],
   "content_scripts": [
     {
-      "matches": ["*://wbsb.dev/articles/new"],
+      "matches": ["*://wbsb.dev/articles/new*"],
       "js": ["assets/content.js"],
       "run_at": "document_idle"
     }

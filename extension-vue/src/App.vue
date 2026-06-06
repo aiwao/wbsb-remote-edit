@@ -173,13 +173,64 @@ function sendTabMessage(tabId, message) {
   });
 }
 
+function executeContentScript(tabId) {
+  const api = extensionApi();
+  if (!api?.scripting?.executeScript) {
+    return Promise.reject(
+      new Error("content script is not running and scripting API is unavailable"),
+    );
+  }
+
+  const details = {
+    files: ["assets/content.js"],
+    target: { tabId },
+  };
+
+  if (globalThis.browser?.scripting?.executeScript) {
+    return api.scripting.executeScript(details);
+  }
+
+  return new Promise((resolve, reject) => {
+    api.scripting.executeScript(details, (results) => {
+      const error = api.runtime?.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(results);
+    });
+  });
+}
+
+function isMissingContentScriptError(error) {
+  const message = toErrorMessage(error).toLowerCase();
+  return (
+    message.includes("could not establish connection") ||
+    message.includes("receiving end does not exist") ||
+    message.includes("no matching message handler")
+  );
+}
+
+async function sendArticleReadMessage(tabId) {
+  try {
+    return await sendTabMessage(tabId, { type: "read_wbsb_article" });
+  } catch (error) {
+    if (!isMissingContentScriptError(error)) {
+      throw error;
+    }
+
+    await executeContentScript(tabId);
+    return sendTabMessage(tabId, { type: "read_wbsb_article" });
+  }
+}
+
 async function readWBSBArticle() {
   const tab = await queryActiveTab();
   if (!tab?.id) {
     throw new Error("active tab is unavailable");
   }
 
-  const response = await sendTabMessage(tab.id, { type: "read_wbsb_article" });
+  const response = await sendArticleReadMessage(tab.id);
   if (!response?.ok) {
     throw new Error(response?.error || "could not read WBSB article");
   }
