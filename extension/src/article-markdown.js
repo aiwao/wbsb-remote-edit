@@ -22,6 +22,45 @@ const turndown = new TurndownService({
   headingStyle: "atx",
 });
 turndown.escape = (text) => text;
+turndown.addRule("wbsbParagraph", {
+  filter: "p",
+  replacement(content, node) {
+    if (node.parentNode?.nodeName === "LI") {
+      return content;
+    }
+
+    return content ? `\n${content}\n` : "";
+  },
+});
+turndown.addRule("wbsbList", {
+  filter: ["ul", "ol"],
+  replacement(content, node) {
+    const parent = node.parentNode;
+    if (parent?.nodeName === "LI" && parent.lastElementChild === node) {
+      return `\n${content}`;
+    }
+
+    return content ? `\n${content}\n` : "";
+  },
+});
+turndown.addRule("wbsbListItem", {
+  filter: "li",
+  replacement(content, node, options) {
+    let prefix = `${options.bulletListMarker} `;
+    const parent = node.parentNode;
+    if (parent.nodeName === "OL") {
+      const start = parent.getAttribute("start");
+      const index = Array.prototype.indexOf.call(parent.children, node);
+      prefix = `${start ? Number(start) + index : index + 1}. `;
+    }
+
+    const itemContent = content
+      .replace(/^\n+|\n+$/g, "")
+      .replace(/\n/gm, `\n${" ".repeat(prefix.length)}`);
+
+    return `${prefix}${itemContent}${node.nextSibling ? "\n" : ""}`;
+  },
+});
 
 function normalizedTextContent(element) {
   return (element.textContent || "").replace(/\u00a0/g, " ").trim();
