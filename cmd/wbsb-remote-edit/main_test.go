@@ -61,11 +61,12 @@ func TestNormalizeEndpointPath(t *testing.T) {
 }
 
 func TestCaptureEditorBodyUsesEditorCommand(t *testing.T) {
-	editor := `sh -c 'test "$(cat "$1")" = "seed content" && printf "updated content" > "$1"' sh`
+	editor := `sh -c 'base=$(basename "$1"); case "$base" in Draft-*.md) ;; *) exit 7;; esac; test "$(cat "$1")" = "seed content" && printf "updated content" > "$1"' sh`
 
 	got, err := captureEditorBody(
 		context.Background(),
 		editor,
+		"Draft",
 		"seed content",
 		bytes.NewReader(nil),
 		io.Discard,
@@ -85,6 +86,7 @@ func TestCaptureEditorBodyRequiresEditor(t *testing.T) {
 	_, err := captureEditorBody(
 		context.Background(),
 		"",
+		"Draft",
 		"",
 		bytes.NewReader(nil),
 		io.Discard,
@@ -92,5 +94,25 @@ func TestCaptureEditorBodyRequiresEditor(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error when no editor is configured")
+	}
+}
+
+func TestEditorTempPatternUsesTitleMarkdownName(t *testing.T) {
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{title: "Draft", want: "Draft-*.md"},
+		{title: "  Draft  ", want: "Draft-*.md"},
+		{title: "a/b*c", want: "a-b-c-*.md"},
+		{title: "", want: "untitled-*.md"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			if got := editorTempPattern(tt.title); got != tt.want {
+				t.Fatalf("editorTempPattern(%q) = %q, want %q", tt.title, got, tt.want)
+			}
+		})
 	}
 }

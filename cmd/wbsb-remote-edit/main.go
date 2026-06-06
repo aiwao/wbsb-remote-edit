@@ -88,7 +88,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 			}
 			fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(article.Body)))
 
-			body, err := captureEditorBody(ctx, editor, article.Body, stdin, stdout, stderr)
+			body, err := captureEditorBody(ctx, editor, title, article.Body, stdin, stdout, stderr)
 			if err != nil {
 				stop()
 				<-serverErr
@@ -148,6 +148,7 @@ func normalizeEndpointPath(path string) string {
 func captureEditorBody(
 	ctx context.Context,
 	editor string,
+	title string,
 	initialBody string,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
@@ -160,7 +161,7 @@ func captureEditorBody(
 		return "", errors.New("EDITOR is not set; pass --editor")
 	}
 
-	file, err := os.CreateTemp("", "wbsb-remote-edit-*.txt")
+	file, err := os.CreateTemp("", editorTempPattern(title))
 	if err != nil {
 		return "", err
 	}
@@ -185,6 +186,44 @@ func captureEditorBody(
 	}
 
 	return string(body), nil
+}
+
+func editorTempPattern(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "untitled"
+	}
+
+	var builder strings.Builder
+	lastWasDash := false
+	for _, r := range title {
+		if isTempFileNameUnsafe(r) {
+			if !lastWasDash {
+				builder.WriteByte('-')
+				lastWasDash = true
+			}
+			continue
+		}
+
+		builder.WriteRune(r)
+		lastWasDash = false
+	}
+
+	base := strings.Trim(builder.String(), "-")
+	if base == "" {
+		base = "untitled"
+	}
+
+	return base + "-*.md"
+}
+
+func isTempFileNameUnsafe(r rune) bool {
+	switch r {
+	case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
+		return true
+	default:
+		return r < 32 || r == 127
+	}
 }
 
 func runEditor(
