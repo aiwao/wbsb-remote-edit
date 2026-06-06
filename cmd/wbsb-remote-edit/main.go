@@ -85,22 +85,33 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 				return err
 			}
 
-			server.BroadcastEdit(title, content)
 			fmt.Fprintf(
 				stdout,
-				"sent edit %q (%d byte(s)) to %d client(s)\n",
+				"sending edit %q (%d byte(s)); waiting for browser acknowledgement\n",
 				title,
 				len([]byte(content)),
-				server.ClientCount(),
 			)
-			fmt.Fprintln(stdout, "Press Ctrl+C to stop the WebSocket server.")
+			result, err := server.BroadcastEditAndWait(ctx, title, content)
+			stop()
+			serverRunErr := <-serverErr
 
-			select {
-			case <-ctx.Done():
-				return <-serverErr
-			case err := <-serverErr:
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return serverRunErr
+				}
+				if serverRunErr != nil {
+					return errors.Join(err, serverRunErr)
+				}
 				return err
 			}
+			fmt.Fprintf(
+				stdout,
+				"edit %q acknowledged by %d/%d client(s); shut down WebSocket server\n",
+				title,
+				result.Acked,
+				result.Expected,
+			)
+			return serverRunErr
 		},
 	}
 

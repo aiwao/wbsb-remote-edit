@@ -20,7 +20,7 @@ Defaults:
 - Browser extension origins: `chrome-extension://...` and `moz-extension://...` are accepted
 - Local dev origins: `http://localhost`, `http://127.0.0.1`, and loopback IPs are accepted
 
-The command starts the local WebSocket server, opens `$EDITOR`, and sends the title plus the saved editor content to connected extension popups after the editor exits. Use `--editor` to override `$EDITOR`.
+The command starts the local WebSocket server, opens `$EDITOR`, and sends the title plus the saved editor content to the extension after the editor exits. The extension acknowledges the received edit after displaying it, then the CLI shuts down the WebSocket server. Use `--editor` to override `$EDITOR`.
 
 ## Load in Chrome
 

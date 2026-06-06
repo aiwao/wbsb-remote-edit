@@ -72,9 +72,18 @@ function handleMessage(event) {
   if (message.type === "edit") {
     els.editTitle.textContent = message.title || "Untitled";
     els.editContent.textContent = message.content || "";
+    sendAck(message);
   }
 
   appendLog(message.from || "CLI", messageText(message));
+}
+
+function sendAck(message) {
+  if (!message.id || !state.socket || state.socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  state.socket.send(JSON.stringify({ type: "ack", id: message.id }));
 }
 
 function connect() {

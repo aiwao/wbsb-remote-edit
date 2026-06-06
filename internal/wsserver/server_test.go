@@ -1,6 +1,7 @@
 package wsserver
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -53,6 +54,9 @@ func TestBroadcastEdit(t *testing.T) {
 	if got.From != "cli" {
 		t.Fatalf("From = %q, want %q", got.From, "cli")
 	}
+	if got.ID == "" {
+		t.Fatal("ID is blank")
+	}
 }
 
 func TestLatestEditSentOnConnect(t *testing.T) {
@@ -72,6 +76,102 @@ func TestLatestEditSentOnConnect(t *testing.T) {
 	if got.Content != "Already written" {
 		t.Fatalf("Content = %q, want %q", got.Content, "Already written")
 	}
+}
+
+func TestBroadcastEditAndWait(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	readUntil(t, conn, "connected")
+
+	resultCh := make(chan deliveryTestResult, 1)
+	go func() {
+		result, err := server.BroadcastEditAndWait(context.Background(), "Draft", "Saved")
+		resultCh <- deliveryTestResult{result: result, err: err}
+	}()
+
+	got := readUntil(t, conn, "edit")
+	if got.ID == "" {
+		t.Fatal("ID is blank")
+	}
+	if err := conn.WriteJSON(Message{Type: "ack", ID: got.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	result := readDeliveryResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("BroadcastEditAndWait error: %v", result.err)
+	}
+	if result.result.Acked != 1 || result.result.Expected != 1 {
+		t.Fatalf("delivery result = %+v, want 1/1", result.result)
+	}
+}
+
+func TestBroadcastEditAndWaitForLateConnect(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan deliveryTestResult, 1)
+	go func() {
+		result, err := server.BroadcastEditAndWait(context.Background(), "Late draft", "Saved later")
+		resultCh <- deliveryTestResult{result: result, err: err}
+	}()
+
+	waitForLatestEdit(t, server)
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Late draft" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Late draft")
+	}
+	if err := conn.WriteJSON(Message{Type: "ack", ID: got.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	result := readDeliveryResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("BroadcastEditAndWait error: %v", result.err)
+	}
+	if result.result.Acked != 1 || result.result.Expected != 1 {
+		t.Fatalf("delivery result = %+v, want 1/1", result.result)
+	}
+}
+
+func TestBroadcastEditAndWaitDetectsDisconnectBeforeAck(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	conn := dial(t, testServer.URL)
+	readUntil(t, conn, "connected")
+
+	resultCh := make(chan deliveryTestResult, 1)
+	go func() {
+		result, err := server.BroadcastEditAndWait(context.Background(), "Draft", "Saved")
+		resultCh <- deliveryTestResult{result: result, err: err}
+	}()
+
+	readUntil(t, conn, "edit")
+	if err := conn.Close(); err != nil {
+		t.Fatalf("close websocket: %v", err)
+	}
+
+	result := readDeliveryResult(t, resultCh)
+	if result.err == nil {
+		t.Fatal("expected disconnect error")
+	}
+}
+
+type deliveryTestResult struct {
+	result DeliveryResult
+	err    error
 }
 
 func dial(t *testing.T, httpURL string) *websocket.Conn {
@@ -106,4 +206,31 @@ func readUntil(t *testing.T, conn *websocket.Conn, messageType string) Message {
 			return got
 		}
 	}
+}
+
+func readDeliveryResult(t *testing.T, resultCh <-chan deliveryTestResult) deliveryTestResult {
+	t.Helper()
+
+	select {
+	case result := <-resultCh:
+		return result
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for delivery result")
+	}
+
+	return deliveryTestResult{}
+}
+
+func waitForLatestEdit(t *testing.T, server *Server) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := server.lastEdit(); ok {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatal("timed out waiting for latest edit")
 }
