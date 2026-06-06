@@ -16,6 +16,7 @@ const TEXTLESS_MARKDOWN_SELECTOR = [
   "ul",
   "video",
 ].join(",");
+const ARTICLE_EDITOR_UI_SELECTOR = "select";
 
 const turndown = new TurndownService({
   codeBlockStyle: "fenced",
@@ -77,8 +78,17 @@ function isBlankArticleBodyChild(element) {
   return normalizedTextContent(element) === "" && !hasTextlessMarkdownElement(element);
 }
 
+function cloneArticleBodyChildWithoutEditorUi(element) {
+  const clone = element.cloneNode(true);
+  clone.querySelectorAll(ARTICLE_EDITOR_UI_SELECTOR).forEach((editorUiElement) => {
+    editorUiElement.remove();
+  });
+  return clone;
+}
+
 export function articleBodyChildrenToMarkdown(children) {
   const html = Array.from(children)
+    .map((child) => cloneArticleBodyChildWithoutEditorUi(child))
     .filter((child) => !isBlankArticleBodyChild(child))
     .map((child) => child.outerHTML)
     .join("");

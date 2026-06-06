@@ -1,13 +1,37 @@
 import { describe, expect, it } from "vite-plus/test";
 import { articleBodyChildrenToMarkdown } from "./article-markdown.js";
 
-function articleChild({ html, text = "", matches = false, hasDescendant = false }) {
-  return {
+function articleChild({
+  editorUiRemoved,
+  hasDescendant = false,
+  html,
+  matches = false,
+  text = "",
+}) {
+  const element = {
     matches: () => matches,
     outerHTML: html,
     querySelector: () => (hasDescendant ? {} : null),
+    querySelectorAll: () => [],
     textContent: text,
   };
+
+  element.cloneNode = () => {
+    const clone = articleChild({ hasDescendant, html, matches, text });
+    if (editorUiRemoved) {
+      clone.querySelectorAll = () => [
+        {
+          remove() {
+            clone.outerHTML = editorUiRemoved.html;
+            clone.textContent = editorUiRemoved.text || "";
+          },
+        },
+      ];
+    }
+    return clone;
+  };
+
+  return element;
 }
 
 describe("articleBodyChildrenToMarkdown", () => {
@@ -29,6 +53,22 @@ describe("articleBodyChildrenToMarkdown", () => {
     ]);
 
     expect(markdown).toBe("first\n\n* * *\n\nsecond");
+  });
+
+  it("removes code block language selects before markdown conversion", () => {
+    const markdown = articleBodyChildrenToMarkdown([
+      articleChild({
+        editorUiRemoved: {
+          html: '<pre><code class="language-js">console.log(1)</code></pre>',
+          text: "console.log(1)",
+        },
+        html: '<pre><select><option>JavaScript</option></select><code class="language-js">console.log(1)</code></pre>',
+        matches: true,
+        text: "JavaScriptconsole.log(1)",
+      }),
+    ]);
+
+    expect(markdown).toBe("```js\nconsole.log(1)\n```");
   });
 
   it("converts tight ProseMirror article blocks without blank lines after every line", () => {
