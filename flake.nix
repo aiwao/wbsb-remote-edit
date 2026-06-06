@@ -30,6 +30,7 @@
             pnpm
             vscode-langservers-extracted
             vscode-css-languageserver
+            web-ext
           ];
         };
       }
