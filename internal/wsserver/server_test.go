@@ -1,6 +1,7 @@
 package wsserver
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -9,7 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestWebSocketGreet(t *testing.T) {
+func TestWebSocketEdit(t *testing.T) {
 	server := New(Config{})
 	testServer := httptest.NewServer(server.Handler())
 	defer testServer.Close()
@@ -19,17 +20,20 @@ func TestWebSocketGreet(t *testing.T) {
 
 	readUntil(t, conn, "connected")
 
-	if err := conn.WriteJSON(Message{Type: "greet", Name: "Ada"}); err != nil {
-		t.Fatalf("write greet message: %v", err)
+	if err := conn.WriteJSON(Message{Type: "edit", Title: "Draft", Body: "Hello from editor"}); err != nil {
+		t.Fatalf("write edit message: %v", err)
 	}
 
-	got := readUntil(t, conn, "greet")
-	if got.Greeting != "Hello, Ada!" {
-		t.Fatalf("Greeting = %q, want %q", got.Greeting, "Hello, Ada!")
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Draft" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Draft")
+	}
+	if got.Body != "Hello from editor" {
+		t.Fatalf("Body = %q, want %q", got.Body, "Hello from editor")
 	}
 }
 
-func TestBroadcastGreeting(t *testing.T) {
+func TestBroadcastEdit(t *testing.T) {
 	server := New(Config{})
 	testServer := httptest.NewServer(server.Handler())
 	defer testServer.Close()
@@ -38,15 +42,207 @@ func TestBroadcastGreeting(t *testing.T) {
 	defer conn.Close()
 
 	readUntil(t, conn, "connected")
-	server.BroadcastGreeting("Grace")
+	server.BroadcastEdit("Release notes", "Ship it")
 
-	got := readUntil(t, conn, "greet")
-	if got.Greeting != "Hello, Grace!" {
-		t.Fatalf("Greeting = %q, want %q", got.Greeting, "Hello, Grace!")
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Release notes" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Release notes")
+	}
+	if got.Body != "Ship it" {
+		t.Fatalf("Body = %q, want %q", got.Body, "Ship it")
 	}
 	if got.From != "cli" {
 		t.Fatalf("From = %q, want %q", got.From, "cli")
 	}
+	if got.ID == "" {
+		t.Fatal("ID is blank")
+	}
+}
+
+func TestLatestEditSentOnConnect(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	server.BroadcastEdit("Existing draft", "Already written")
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Existing draft" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Existing draft")
+	}
+	if got.Body != "Already written" {
+		t.Fatalf("Body = %q, want %q", got.Body, "Already written")
+	}
+}
+
+func TestBroadcastEditAndWait(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	readUntil(t, conn, "connected")
+
+	resultCh := make(chan deliveryTestResult, 1)
+	go func() {
+		result, err := server.BroadcastEditAndWait(context.Background(), "Draft", "Saved")
+		resultCh <- deliveryTestResult{result: result, err: err}
+	}()
+
+	got := readUntil(t, conn, "edit")
+	if got.ID == "" {
+		t.Fatal("ID is blank")
+	}
+	if err := conn.WriteJSON(Message{Type: "ack", ID: got.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	result := readDeliveryResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("BroadcastEditAndWait error: %v", result.err)
+	}
+	if result.result.Acked != 1 || result.result.Expected != 1 {
+		t.Fatalf("delivery result = %+v, want 1/1", result.result)
+	}
+}
+
+func TestBroadcastEditAndWaitForLateConnect(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan deliveryTestResult, 1)
+	go func() {
+		result, err := server.BroadcastEditAndWait(context.Background(), "Late draft", "Saved later")
+		resultCh <- deliveryTestResult{result: result, err: err}
+	}()
+
+	waitForLatestEdit(t, server)
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Late draft" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Late draft")
+	}
+	if err := conn.WriteJSON(Message{Type: "ack", ID: got.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	result := readDeliveryResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("BroadcastEditAndWait error: %v", result.err)
+	}
+	if result.result.Acked != 1 || result.result.Expected != 1 {
+		t.Fatalf("delivery result = %+v, want 1/1", result.result)
+	}
+}
+
+func TestBroadcastEditAndWaitDetectsDisconnectBeforeAck(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	conn := dial(t, testServer.URL)
+	readUntil(t, conn, "connected")
+
+	resultCh := make(chan deliveryTestResult, 1)
+	go func() {
+		result, err := server.BroadcastEditAndWait(context.Background(), "Draft", "Saved")
+		resultCh <- deliveryTestResult{result: result, err: err}
+	}()
+
+	readUntil(t, conn, "edit")
+	if err := conn.Close(); err != nil {
+		t.Fatalf("close websocket: %v", err)
+	}
+
+	result := readDeliveryResult(t, resultCh)
+	if result.err == nil {
+		t.Fatal("expected disconnect error")
+	}
+}
+
+func TestGetWBSBArticleWaitsForClientResponse(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan articleTestResult, 1)
+	go func() {
+		article, err := server.GetWBSBArticle(context.Background())
+		resultCh <- articleTestResult{article: article, err: err}
+	}()
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	readUntil(t, conn, "connected")
+	request := readUntil(t, conn, "get_wbsb_article")
+	if request.ID == "" {
+		t.Fatal("ID is blank")
+	}
+
+	if err := conn.WriteJSON(Message{
+		Type:  "wbsb_article",
+		ID:    request.ID,
+		Title: "ABCDEFG",
+		Body:  "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz",
+	}); err != nil {
+		t.Fatalf("write article message: %v", err)
+	}
+
+	result := readArticleResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("GetWBSBArticle error: %v", result.err)
+	}
+	if result.article.Title != "ABCDEFG" {
+		t.Fatalf("Title = %q, want %q", result.article.Title, "ABCDEFG")
+	}
+	if result.article.Body != "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz" {
+		t.Fatalf("Body = %q, want debug body", result.article.Body)
+	}
+}
+
+func TestGetWBSBArticleDetectsDisconnectBeforeResponse(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan articleTestResult, 1)
+	go func() {
+		article, err := server.GetWBSBArticle(context.Background())
+		resultCh <- articleTestResult{article: article, err: err}
+	}()
+
+	conn := dial(t, testServer.URL)
+
+	readUntil(t, conn, "connected")
+	readUntil(t, conn, "get_wbsb_article")
+	if err := conn.Close(); err != nil {
+		t.Fatalf("close websocket: %v", err)
+	}
+
+	result := readArticleResult(t, resultCh)
+	if result.err == nil {
+		t.Fatal("expected disconnect error")
+	}
+}
+
+type deliveryTestResult struct {
+	result DeliveryResult
+	err    error
+}
+
+type articleTestResult struct {
+	article Article
+	err     error
 }
 
 func dial(t *testing.T, httpURL string) *websocket.Conn {
@@ -81,4 +277,44 @@ func readUntil(t *testing.T, conn *websocket.Conn, messageType string) Message {
 			return got
 		}
 	}
+}
+
+func readDeliveryResult(t *testing.T, resultCh <-chan deliveryTestResult) deliveryTestResult {
+	t.Helper()
+
+	select {
+	case result := <-resultCh:
+		return result
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for delivery result")
+	}
+
+	return deliveryTestResult{}
+}
+
+func readArticleResult(t *testing.T, resultCh <-chan articleTestResult) articleTestResult {
+	t.Helper()
+
+	select {
+	case result := <-resultCh:
+		return result
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for article result")
+	}
+
+	return articleTestResult{}
+}
+
+func waitForLatestEdit(t *testing.T, server *Server) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := server.lastEdit(); ok {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatal("timed out waiting for latest edit")
 }

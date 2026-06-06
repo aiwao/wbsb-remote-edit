@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Greet WS</title>
+    <title>Remote Edit</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="popup">
       <header class="topbar">
-        <h1>Greet WS</h1>
+        <h1>Remote Edit</h1>
         <span id="status" class="status is-offline">Offline</span>
       </header>
 
@@ -18,20 +18,18 @@
         <input id="endpoint" type="url" value="ws://127.0.0.1:8787/ws" spellcheck="false" />
       </label>
 
-      <div class="controls">
-        <button id="connect" type="button">Connect</button>
-        <button id="disconnect" type="button" class="secondary" disabled>Disconnect</button>
-      </div>
+      <label class="switch-control">
+        <input id="auto-connect" type="checkbox" role="switch" />
+        <span class="switch-track" aria-hidden="true">
+          <span class="switch-thumb"></span>
+        </span>
+        <span class="switch-label">Auto connect</span>
+      </label>
 
-      <form id="greet-form" class="greet-form">
-        <label class="field">
-          <span>Name</span>
-          <input id="name" type="text" autocomplete="name" placeholder="Ada" />
-        </label>
-        <button id="send" type="submit">Send</button>
-      </form>
-
-      <output id="greeting" class="greeting">No greeting yet</output>
+      <section class="edit-view" aria-live="polite">
+        <h2 id="edit-title" class="edit-title">No edit yet</h2>
+        <pre id="edit-content" class="edit-content"></pre>
+      </section>
 
       <section class="log-shell" aria-label="Message log">
         <div id="log" class="log"></div>

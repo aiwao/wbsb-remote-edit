@@ -1,25 +1,23 @@
-# Greet WebSocket Bridge
+# Remote Edit Bridge
 
 Browser extension popup and a Go/Cobra CLI communicate over WebSocket.
 
-The extension sends:
+The CLI sends:
 
 ```json
-{ "type": "greet", "name": "Ada" }
+{ "type": "edit", "title": "Draft", "body": "Text written in the editor", "from": "cli" }
 ```
 
-The CLI replies:
+Before opening the editor, the CLI requests the current article from the extension:
 
 ```json
-{ "type": "greet", "name": "Ada", "greeting": "Hello, Ada!", "from": "cli" }
+{ "type": "get_wbsb_article", "from": "cli" }
 ```
-
-The CLI can also broadcast greetings back to connected extension popups from standard input.
 
 ## Run the CLI
 
 ```sh
-nix develop --command go run ./cmd/greet-ws serve
+nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
 ```
 
 Defaults:
@@ -28,7 +26,7 @@ Defaults:
 - Browser extension origins: `chrome-extension://...` and `moz-extension://...` are accepted
 - Local dev origins: `http://localhost`, `http://127.0.0.1`, and loopback IPs are accepted
 
-Type a name into the running CLI and press Enter to broadcast a greeting to connected extension popups.
+The command starts the local WebSocket server, waits for the extension to connect, requests the current article, opens `$EDITOR` with the returned body, and sends the title plus the saved editor content to the extension after the editor exits. The extension acknowledges the received edit after displaying it, then the CLI shuts down the WebSocket server. Use `--editor` to override `$EDITOR`. Use `--title` to override the article title returned by the extension.
 
 ## Load in Chrome
 
@@ -36,14 +34,14 @@ Type a name into the running CLI and press Enter to broadcast a greeting to conn
 2. Enable Developer mode.
 3. Click Load unpacked.
 4. Select the `extension/` directory in this repository.
-5. Open the extension popup, connect, enter a name, and send.
+5. Open the extension popup and connect.
 
 ## Load in Firefox
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click Load Temporary Add-on.
 3. Select `extension/manifest.json` in this repository.
-4. Open the extension popup, connect, enter a name, and send.
+4. Open the extension popup and connect.
 
 ## Browser Compatibility Notes
 
@@ -55,5 +53,5 @@ Type a name into the running CLI and press Enter to broadcast a greeting to conn
 
 ```sh
 nix develop --command go test ./...
-nix develop --command go run ./cmd/greet-ws serve --addr 127.0.0.1:8787
+nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft" --addr 127.0.0.1:8787
 ```

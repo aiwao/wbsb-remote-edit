@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Greet WebSocket Bridge",
-  "description": "Send names to the local greet-ws CLI and receive greetings.",
+  "name": "Remote Edit Bridge",
+  "description": "Receive editor content from the local wbsb-remote-edit CLI.",
   "version": "0.1.0",
   "action": {
-    "default_title": "Greet WS",
+    "default_title": "Remote Edit",
     "default_popup": "popup.html"
   },
   "host_permissions": [
@@ -16,7 +16,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "greet-ws-bridge@wbsb-remote-edit.local",
+      "id": "remote-edit-bridge@wbsb-remote-edit.local",
       "data_collection_permissions": {
         "required": [
           "none"
