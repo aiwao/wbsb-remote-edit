@@ -8,9 +8,16 @@
     "default_popup": "popup.html"
   },
   "host_permissions": [
-    "ws://127.0.0.1:8787/*",
-    "ws://localhost:8787/*",
-    "http://127.0.0.1:8787/*",
-    "http://localhost:8787/*"
-  ]
+    "*://localhost/*",
+    "*://127.0.0.1/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "greet-ws-bridge@wbsb-remote-edit.local",
+      "strict_min_version": "109.0"
+    }
+  }
 }

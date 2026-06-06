@@ -30,13 +30,26 @@ Defaults:
 
 Type a name into the running CLI and press Enter to broadcast a greeting to connected extension popups.
 
-## Load the Extension
+## Load in Chrome
 
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
 3. Click Load unpacked.
 4. Select the `extension/` directory in this repository.
 5. Open the extension popup, connect, enter a name, and send.
+
+## Load in Firefox
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click Load Temporary Add-on.
+3. Select `extension/manifest.json` in this repository.
+4. Open the extension popup, connect, enter a name, and send.
+
+## Browser Compatibility Notes
+
+- The extension uses Manifest V3 and avoids browser-specific JavaScript APIs in the popup.
+- `host_permissions` uses portless localhost match patterns so the same manifest works in Chrome and Firefox.
+- The explicit `content_security_policy` allows `ws://localhost:*` and `ws://127.0.0.1:*`, which keeps Firefox from upgrading the local WebSocket endpoint to `wss://`.
 
 ## Useful Commands
 
