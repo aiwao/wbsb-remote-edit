@@ -24,6 +24,36 @@ describe("markdownTokens", () => {
     ]);
   });
 
+  it("parses spaced asterisk thematic breaks before unordered lists", () => {
+    expect(markdownTokens("* * *\n")).toEqual([
+      {
+        markdown: "* * *",
+        type: "thematicBreak",
+      },
+    ]);
+  });
+
+  it("does not group thematic breaks into surrounding unordered lists", () => {
+    expect(markdownTokens("- first\n- - -\n- second\n")).toEqual([
+      {
+        items: ["first"],
+        marker: "-",
+        ordered: false,
+        type: "list",
+      },
+      {
+        markdown: "- - -",
+        type: "thematicBreak",
+      },
+      {
+        items: ["second"],
+        marker: "-",
+        ordered: false,
+        type: "list",
+      },
+    ]);
+  });
+
   it("does not parse list-looking lines inside fenced code", () => {
     expect(markdownTokens("```js\n- not a list\n```")).toEqual([
       {

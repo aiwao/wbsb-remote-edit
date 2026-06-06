@@ -18,6 +18,23 @@ function parseMarkdownListLine(line) {
   };
 }
 
+function parseMarkdownThematicBreakLine(line) {
+  const text = line.endsWith("\n") ? line.slice(0, -1) : line;
+  if (!/^ {0,3}(?:[-*_][ \t]*){3,}$/.test(text)) {
+    return null;
+  }
+
+  const markers = text.trim().replace(/[ \t]/g, "");
+  const marker = markers[0];
+  if (!marker || !Array.from(markers).every((character) => character === marker)) {
+    return null;
+  }
+
+  return {
+    markdown: text.trim(),
+  };
+}
+
 function markdownTextTokens(text) {
   const tokens = [];
   let cursor = 0;
@@ -26,7 +43,24 @@ function markdownTextTokens(text) {
   while (position < text.length) {
     const lineStart = position;
     const lineEnd = lineEndIndex(text, lineStart);
-    const firstItem = parseMarkdownListLine(text.slice(lineStart, lineEnd));
+    const line = text.slice(lineStart, lineEnd);
+    const thematicBreak = parseMarkdownThematicBreakLine(line);
+
+    if (thematicBreak) {
+      if (cursor < lineStart) {
+        tokens.push({ text: text.slice(cursor, lineStart), type: "text" });
+      }
+
+      tokens.push({
+        markdown: thematicBreak.markdown,
+        type: "thematicBreak",
+      });
+      position = lineEnd;
+      cursor = lineEnd;
+      continue;
+    }
+
+    const firstItem = parseMarkdownListLine(line);
 
     if (!firstItem) {
       position = lineEnd;
@@ -39,7 +73,10 @@ function markdownTextTokens(text) {
 
     while (position < text.length) {
       const nextLineEnd = lineEndIndex(text, position);
-      const nextItem = parseMarkdownListLine(text.slice(position, nextLineEnd));
+      const nextLine = text.slice(position, nextLineEnd);
+      const nextItem = parseMarkdownThematicBreakLine(nextLine)
+        ? null
+        : parseMarkdownListLine(nextLine);
       if (!nextItem || nextItem.ordered !== firstItem.ordered) {
         break;
       }
