@@ -36,6 +36,16 @@ type Server struct {
 	deliveryMu     sync.Mutex
 	nextDeliveryID uint64
 	deliveries     map[string]*deliveryWaiter
+	articleMu      sync.Mutex
+	nextArticleID  uint64
+	articleWaiters map[string]*articleWaiter
+	clientMu       sync.Mutex
+	clientWaiters  []chan struct{}
+}
+
+type Article struct {
+	Title string
+	Body  string
 }
 
 type DeliveryResult struct {
@@ -54,6 +64,18 @@ type deliveryWaiter struct {
 	targets   map[*client]struct{}
 	acked     map[*client]struct{}
 	done      chan deliveryOutcome
+	completed bool
+}
+
+type articleOutcome struct {
+	article Article
+	err     error
+}
+
+type articleWaiter struct {
+	id        string
+	target    *client
+	done      chan articleOutcome
 	completed bool
 }
 
@@ -85,6 +107,7 @@ func New(config Config) *Server {
 		logger:         config.Logger,
 		hub:            newHub(),
 		deliveries:     make(map[string]*deliveryWaiter),
+		articleWaiters: make(map[string]*articleWaiter),
 	}
 	server.upgrader = websocket.Upgrader{
 		CheckOrigin: server.checkOrigin,
@@ -170,6 +193,39 @@ func (s *Server) BroadcastEditAndWait(ctx context.Context, title, content string
 	}
 }
 
+func (s *Server) GetWBSBArticle(ctx context.Context) (Article, error) {
+	for {
+		client, err := s.waitForClient(ctx)
+		if err != nil {
+			return Article{}, err
+		}
+
+		message := s.newGetWBSBArticleMessage()
+		waiter := &articleWaiter{
+			id:     message.ID,
+			target: client,
+			done:   make(chan articleOutcome, 1),
+		}
+
+		s.articleMu.Lock()
+		s.articleWaiters[message.ID] = waiter
+		s.articleMu.Unlock()
+
+		if !s.hub.send(client, message) {
+			s.removeArticleWaiter(message.ID)
+			continue
+		}
+
+		select {
+		case outcome := <-waiter.done:
+			return outcome.article, outcome.err
+		case <-ctx.Done():
+			s.removeArticleWaiter(message.ID)
+			return Article{}, ctx.Err()
+		}
+	}
+}
+
 func (s *Server) ClientCount() int {
 	return s.hub.count()
 }
@@ -196,6 +252,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		send: make(chan Message, 16),
 	}
 	s.hub.add(client)
+	s.notifyClientConnected()
 
 	go client.writeLoop()
 
@@ -247,6 +304,13 @@ func (s *Server) reply(client *client, message Message) (Message, bool) {
 			From: "cli",
 			At:   now(),
 		}, true
+	case "wbsb_article":
+		s.completeArticleRequest(client, message)
+		return Message{
+			Type: "ok",
+			From: "cli",
+			At:   now(),
+		}, true
 	case "ping":
 		return Message{
 			Type: "pong",
@@ -261,6 +325,23 @@ func (s *Server) reply(client *client, message Message) (Message, bool) {
 			At:    now(),
 		}, true
 	}
+}
+
+func (s *Server) newGetWBSBArticleMessage() Message {
+	return Message{
+		Type: "get_wbsb_article",
+		ID:   s.nextArticleRequestID(),
+		From: "cli",
+		At:   now(),
+	}
+}
+
+func (s *Server) nextArticleRequestID() string {
+	s.articleMu.Lock()
+	defer s.articleMu.Unlock()
+
+	s.nextArticleID++
+	return "article-" + strconv.FormatUint(s.nextArticleID, 10)
 }
 
 func (s *Server) newEditMessage(title, content string) Message {
@@ -320,6 +401,8 @@ func (s *Server) ackDelivery(client *client, id string) {
 }
 
 func (s *Server) clientDisconnected(client *client) {
+	s.failArticleRequestsForClient(client)
+
 	s.deliveryMu.Lock()
 	defer s.deliveryMu.Unlock()
 
@@ -340,6 +423,56 @@ func (s *Server) clientDisconnected(client *client) {
 			Expected: len(waiter.targets),
 		}, errors.New("client disconnected before acknowledging edit"))
 	}
+}
+
+func (s *Server) completeArticleRequest(client *client, message Message) {
+	id := strings.TrimSpace(message.ID)
+	if id == "" {
+		return
+	}
+
+	s.articleMu.Lock()
+	defer s.articleMu.Unlock()
+
+	waiter, ok := s.articleWaiters[id]
+	if !ok || waiter.completed || waiter.target != client {
+		return
+	}
+
+	s.completeArticleRequestLocked(waiter, Article{
+		Title: message.Title,
+		Body:  message.Body,
+	}, nil)
+}
+
+func (s *Server) failArticleRequestsForClient(client *client) {
+	s.articleMu.Lock()
+	defer s.articleMu.Unlock()
+
+	for _, waiter := range s.articleWaiters {
+		if waiter.completed || waiter.target != client {
+			continue
+		}
+
+		s.completeArticleRequestLocked(waiter, Article{}, errors.New("client disconnected before returning article"))
+	}
+}
+
+func (s *Server) removeArticleWaiter(id string) {
+	s.articleMu.Lock()
+	defer s.articleMu.Unlock()
+
+	delete(s.articleWaiters, id)
+}
+
+func (s *Server) completeArticleRequestLocked(waiter *articleWaiter, article Article, err error) {
+	if waiter.completed {
+		return
+	}
+
+	waiter.completed = true
+	delete(s.articleWaiters, waiter.id)
+	waiter.done <- articleOutcome{article: article, err: err}
 }
 
 func (s *Server) removeDelivery(id string) {
@@ -374,6 +507,52 @@ func (s *Server) lastEdit() (Message, bool) {
 		return Message{}, false
 	}
 	return *s.latestEdit, true
+}
+
+func (s *Server) waitForClient(ctx context.Context) (*client, error) {
+	for {
+		s.clientMu.Lock()
+		if client := s.hub.first(); client != nil {
+			s.clientMu.Unlock()
+			return client, nil
+		}
+
+		waiter := make(chan struct{})
+		s.clientWaiters = append(s.clientWaiters, waiter)
+		s.clientMu.Unlock()
+
+		select {
+		case <-waiter:
+		case <-ctx.Done():
+			s.removeClientWaiter(waiter)
+			return nil, ctx.Err()
+		}
+	}
+}
+
+func (s *Server) notifyClientConnected() {
+	s.clientMu.Lock()
+	waiters := s.clientWaiters
+	s.clientWaiters = nil
+	s.clientMu.Unlock()
+
+	for _, waiter := range waiters {
+		close(waiter)
+	}
+}
+
+func (s *Server) removeClientWaiter(waiter chan struct{}) {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+
+	for i, candidate := range s.clientWaiters {
+		if candidate != waiter {
+			continue
+		}
+
+		s.clientWaiters = append(s.clientWaiters[:i], s.clientWaiters[i+1:]...)
+		return
+	}
 }
 
 func (s *Server) checkOrigin(r *http.Request) bool {
@@ -459,6 +638,35 @@ func (h *hub) broadcast(message Message) []*client {
 	}
 
 	return targets
+}
+
+func (h *hub) send(client *client, message Message) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if _, ok := h.clients[client]; !ok {
+		return false
+	}
+
+	select {
+	case client.send <- message:
+		return true
+	default:
+		delete(h.clients, client)
+		close(client.send)
+		return false
+	}
+}
+
+func (h *hub) first() *client {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for client := range h.clients {
+		return client
+	}
+
+	return nil
 }
 
 func (h *hub) count() int {

@@ -169,9 +169,80 @@ func TestBroadcastEditAndWaitDetectsDisconnectBeforeAck(t *testing.T) {
 	}
 }
 
+func TestGetWBSBArticleWaitsForClientResponse(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan articleTestResult, 1)
+	go func() {
+		article, err := server.GetWBSBArticle(context.Background())
+		resultCh <- articleTestResult{article: article, err: err}
+	}()
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	readUntil(t, conn, "connected")
+	request := readUntil(t, conn, "get_wbsb_article")
+	if request.ID == "" {
+		t.Fatal("ID is blank")
+	}
+
+	if err := conn.WriteJSON(Message{
+		Type:  "wbsb_article",
+		ID:    request.ID,
+		Title: "ABCDEFG",
+		Body:  "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz",
+	}); err != nil {
+		t.Fatalf("write article message: %v", err)
+	}
+
+	result := readArticleResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("GetWBSBArticle error: %v", result.err)
+	}
+	if result.article.Title != "ABCDEFG" {
+		t.Fatalf("Title = %q, want %q", result.article.Title, "ABCDEFG")
+	}
+	if result.article.Body != "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz" {
+		t.Fatalf("Body = %q, want debug body", result.article.Body)
+	}
+}
+
+func TestGetWBSBArticleDetectsDisconnectBeforeResponse(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan articleTestResult, 1)
+	go func() {
+		article, err := server.GetWBSBArticle(context.Background())
+		resultCh <- articleTestResult{article: article, err: err}
+	}()
+
+	conn := dial(t, testServer.URL)
+
+	readUntil(t, conn, "connected")
+	readUntil(t, conn, "get_wbsb_article")
+	if err := conn.Close(); err != nil {
+		t.Fatalf("close websocket: %v", err)
+	}
+
+	result := readArticleResult(t, resultCh)
+	if result.err == nil {
+		t.Fatal("expected disconnect error")
+	}
+}
+
 type deliveryTestResult struct {
 	result DeliveryResult
 	err    error
+}
+
+type articleTestResult struct {
+	article Article
+	err     error
 }
 
 func dial(t *testing.T, httpURL string) *websocket.Conn {
@@ -219,6 +290,19 @@ func readDeliveryResult(t *testing.T, resultCh <-chan deliveryTestResult) delive
 	}
 
 	return deliveryTestResult{}
+}
+
+func readArticleResult(t *testing.T, resultCh <-chan articleTestResult) articleTestResult {
+	t.Helper()
+
+	select {
+	case result := <-resultCh:
+		return result
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for article result")
+	}
+
+	return articleTestResult{}
 }
 
 func waitForLatestEdit(t *testing.T, server *Server) {

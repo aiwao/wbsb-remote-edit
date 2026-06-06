@@ -8,10 +8,16 @@ The CLI sends:
 { "type": "edit", "title": "Draft", "content": "Text written in the editor", "from": "cli" }
 ```
 
+Before opening the editor, the CLI requests the current article from the extension:
+
+```json
+{ "type": "get_wbsb_article", "from": "cli" }
+```
+
 ## Run the CLI
 
 ```sh
-nix develop --command go run ./cmd/wbsb-remote-edit edit "Draft"
+nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
 ```
 
 Defaults:
@@ -20,7 +26,7 @@ Defaults:
 - Browser extension origins: `chrome-extension://...` and `moz-extension://...` are accepted
 - Local dev origins: `http://localhost`, `http://127.0.0.1`, and loopback IPs are accepted
 
-The command starts the local WebSocket server, opens `$EDITOR`, and sends the title plus the saved editor content to the extension after the editor exits. The extension acknowledges the received edit after displaying it, then the CLI shuts down the WebSocket server. Use `--editor` to override `$EDITOR`.
+The command starts the local WebSocket server, waits for the extension to connect, requests the current article, opens `$EDITOR` with the returned body, and sends the title plus the saved editor content to the extension after the editor exits. The extension acknowledges the received edit after displaying it, then the CLI shuts down the WebSocket server. Use `--editor` to override `$EDITOR`. Use `--title` to override the article title returned by the extension.
 
 ## Load in Chrome
 
@@ -47,5 +53,5 @@ The command starts the local WebSocket server, opens `$EDITOR`, and sends the ti
 
 ```sh
 nix develop --command go test ./...
-nix develop --command go run ./cmd/wbsb-remote-edit edit "Draft" --addr 127.0.0.1:8787
+nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft" --addr 127.0.0.1:8787
 ```

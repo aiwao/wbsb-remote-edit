@@ -26,6 +26,20 @@ func TestRootCommandHasEditOnly(t *testing.T) {
 	}
 }
 
+func TestEditCommandUsesTitleFlagAndNoPositionals(t *testing.T) {
+	cmd := newEditCmd(bytes.NewReader(nil), io.Discard, io.Discard)
+
+	if cmd.Flags().Lookup("title") == nil {
+		t.Fatal("edit command does not have title flag")
+	}
+	if err := cmd.Args(cmd, []string{}); err != nil {
+		t.Fatalf("edit command rejects empty args: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"Draft"}); err == nil {
+		t.Fatal("edit command accepts positional title")
+	}
+}
+
 func TestNormalizeEndpointPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -47,11 +61,12 @@ func TestNormalizeEndpointPath(t *testing.T) {
 }
 
 func TestCaptureEditorContentUsesEditorCommand(t *testing.T) {
-	editor := `sh -c 'printf "updated content" > "$1"' sh`
+	editor := `sh -c 'test "$(cat "$1")" = "seed content" && printf "updated content" > "$1"' sh`
 
 	got, err := captureEditorContent(
 		context.Background(),
 		editor,
+		"seed content",
 		bytes.NewReader(nil),
 		io.Discard,
 		io.Discard,
@@ -69,6 +84,7 @@ func TestCaptureEditorContentRequiresEditor(t *testing.T) {
 
 	_, err := captureEditorContent(
 		context.Background(),
+		"",
 		"",
 		bytes.NewReader(nil),
 		io.Discard,

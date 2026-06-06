@@ -3,6 +3,10 @@ const STORAGE_KEYS = {
   autoConnect: "remote-edit-auto-connect",
   endpoint: "remote-edit-endpoint",
 };
+const DEBUG_ARTICLE = {
+  title: "ABCDEFG",
+  body: "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz",
+};
 
 const state = {
   socket: null,
@@ -58,6 +62,9 @@ function appendLog(source, text) {
 }
 
 function messageText(message) {
+  if (message.type === "get_wbsb_article") {
+    return "get_wbsb_article";
+  }
   if (message.type === "edit") {
     return message.title || "untitled edit";
   }
@@ -76,6 +83,10 @@ function handleMessage(event) {
     return;
   }
 
+  if (message.type === "get_wbsb_article") {
+    sendWBSBArticle(message);
+  }
+
   if (message.type === "edit") {
     els.editTitle.textContent = message.title || "Untitled";
     els.editContent.textContent = message.content || "";
@@ -91,6 +102,22 @@ function sendAck(message) {
   }
 
   state.socket.send(JSON.stringify({ type: "ack", id: message.id }));
+}
+
+function sendWBSBArticle(message) {
+  if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  state.socket.send(
+    JSON.stringify({
+      type: "wbsb_article",
+      id: message.id,
+      title: DEBUG_ARTICLE.title,
+      body: DEBUG_ARTICLE.body,
+      from: "extension",
+    }),
+  );
 }
 
 function connect() {

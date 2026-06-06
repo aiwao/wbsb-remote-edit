@@ -6,6 +6,7 @@ type Message struct {
 	Type    string `json:"type"`
 	ID      string `json:"id,omitempty"`
 	Title   string `json:"title,omitempty"`
+	Body    string `json:"body,omitempty"`
 	Content string `json:"content,omitempty"`
 	Error   string `json:"error,omitempty"`
 	From    string `json:"from,omitempty"`

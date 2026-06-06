@@ -38,22 +38,15 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	var addr string
 	var path string
 	var editor string
+	var title string
 	var allowedOrigins []string
 
 	cmd := &cobra.Command{
-		Use:   "edit title",
+		Use:   "edit",
 		Short: "Open an editor and publish the written content",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("accepts 1 arg, received %d", len(args))
-			}
-			if strings.TrimSpace(args[0]) == "" {
-				return errors.New("title cannot be blank")
-			}
-			return nil
-		},
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title := strings.TrimSpace(args[0])
+			title = strings.TrimSpace(title)
 			path = normalizeEndpointPath(path)
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -77,8 +70,25 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 			}()
 
 			fmt.Fprintf(stdout, "wbsb-remote-edit listening on ws://%s%s\n", addr, path)
+			fmt.Fprintln(stdout, "waiting for browser extension connection")
 
-			content, err := captureEditorContent(ctx, editor, stdin, stdout, stderr)
+			article, err := server.GetWBSBArticle(ctx)
+			if err != nil {
+				stop()
+				<-serverErr
+				return err
+			}
+			if title == "" {
+				title = strings.TrimSpace(article.Title)
+			}
+			if title == "" {
+				stop()
+				<-serverErr
+				return errors.New("title is blank; pass --title or return a title from get_wbsb_article")
+			}
+			fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(article.Body)))
+
+			content, err := captureEditorContent(ctx, editor, article.Body, stdin, stdout, stderr)
 			if err != nil {
 				stop()
 				<-serverErr
@@ -118,6 +128,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:8787", "host:port to listen on")
 	cmd.Flags().StringVar(&path, "path", "/ws", "WebSocket endpoint path")
 	cmd.Flags().StringVar(&editor, "editor", "", "editor command to run; defaults to $EDITOR")
+	cmd.Flags().StringVar(&title, "title", "", "title to publish; defaults to get_wbsb_article response title")
 	cmd.Flags().StringArrayVar(&allowedOrigins, "allow-origin", nil, "additional exact browser Origin values to accept")
 
 	return cmd
@@ -137,6 +148,7 @@ func normalizeEndpointPath(path string) string {
 func captureEditorContent(
 	ctx context.Context,
 	editor string,
+	initialContent string,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
 ) (string, error) {
@@ -153,6 +165,11 @@ func captureEditorContent(
 		return "", err
 	}
 	defer os.Remove(file.Name())
+
+	if _, err := file.WriteString(initialContent); err != nil {
+		file.Close()
+		return "", err
+	}
 
 	if err := file.Close(); err != nil {
 		return "", err
