@@ -1,14 +1,21 @@
+const RETRY_DELAY_MS = 1500;
+const STORAGE_KEYS = {
+  autoConnect: "remote-edit-auto-connect",
+  endpoint: "remote-edit-endpoint",
+};
+
 const state = {
   socket: null,
   connecting: null,
+  retryTimer: null,
+  autoConnect: false,
   log: [],
 };
 
 const els = {
   endpoint: document.querySelector("#endpoint"),
   status: document.querySelector("#status"),
-  connect: document.querySelector("#connect"),
-  disconnect: document.querySelector("#disconnect"),
+  autoConnect: document.querySelector("#auto-connect"),
   editTitle: document.querySelector("#edit-title"),
   editContent: document.querySelector("#edit-content"),
   log: document.querySelector("#log"),
@@ -23,8 +30,8 @@ function renderControls() {
   const connected = state.socket && state.socket.readyState === WebSocket.OPEN;
   const connecting = Boolean(state.connecting);
 
-  els.connect.disabled = connected || connecting;
-  els.disconnect.disabled = !connected && !connecting;
+  els.autoConnect.checked = state.autoConnect;
+  els.endpoint.disabled = state.autoConnect || connected || connecting;
 }
 
 function appendLog(source, text) {
@@ -97,12 +104,30 @@ function connect() {
   setStatus("Connecting", "is-connecting");
   renderControls();
 
-  state.connecting = new Promise((resolve, reject) => {
-    const socket = new WebSocket(els.endpoint.value.trim());
-    state.socket = socket;
+  let socket;
+  try {
+    socket = new WebSocket(els.endpoint.value.trim());
+  } catch (error) {
+    state.socket = null;
+    setStatus("Error", "is-error");
+    appendLog("extension", error.message);
+    renderControls();
+    return Promise.reject(error);
+  }
+
+  state.socket = socket;
+
+  const connectPromise = new Promise((resolve, reject) => {
+    let settled = false;
 
     socket.addEventListener("open", () => {
+      if (state.socket !== socket) {
+        return;
+      }
+
+      settled = true;
       state.connecting = null;
+      clearRetry();
       setStatus("Online", "is-online");
       appendLog("extension", "connected");
       renderControls();
@@ -112,28 +137,40 @@ function connect() {
     socket.addEventListener("message", handleMessage);
 
     socket.addEventListener("close", () => {
-      state.connecting = null;
       if (state.socket === socket) {
         state.socket = null;
       }
-      setStatus("Offline", "is-offline");
-      appendLog("extension", "disconnected");
+      if (state.connecting === connectPromise) {
+        state.connecting = null;
+      }
+      if (state.autoConnect) {
+        setStatus("Retrying", "is-connecting");
+        appendLog("extension", "disconnected; retrying");
+        scheduleReconnect();
+      } else {
+        setStatus("Offline", "is-offline");
+        appendLog("extension", "disconnected");
+      }
       renderControls();
+
+      if (!settled) {
+        reject(new Error("WebSocket connection closed"));
+      }
     });
 
     socket.addEventListener("error", () => {
-      state.connecting = null;
       setStatus("Error", "is-error");
       appendLog("extension", "connection error");
       renderControls();
-      reject(new Error("WebSocket connection failed"));
     });
   });
 
+  state.connecting = connectPromise;
   return state.connecting;
 }
 
 function disconnect() {
+  clearRetry();
   if (state.socket) {
     state.socket.close();
   }
@@ -143,9 +180,86 @@ function disconnect() {
   renderControls();
 }
 
-els.connect.addEventListener("click", () => {
-  connect().catch(() => {});
-});
-els.disconnect.addEventListener("click", disconnect);
+function scheduleReconnect() {
+  const connected = state.socket && state.socket.readyState === WebSocket.OPEN;
+  if (!state.autoConnect || state.retryTimer || state.connecting || connected) {
+    return;
+  }
 
-renderControls();
+  state.retryTimer = window.setTimeout(() => {
+    state.retryTimer = null;
+    if (!state.autoConnect) {
+      renderControls();
+      return;
+    }
+
+    connect().catch(() => {
+      scheduleReconnect();
+    });
+  }, RETRY_DELAY_MS);
+}
+
+function clearRetry() {
+  if (!state.retryTimer) {
+    return;
+  }
+
+  window.clearTimeout(state.retryTimer);
+  state.retryTimer = null;
+}
+
+function startAutoConnect() {
+  state.autoConnect = true;
+  saveSettings();
+  appendLog("extension", "auto connect on");
+  renderControls();
+
+  connect().catch(() => {
+    scheduleReconnect();
+  });
+}
+
+function stopAutoConnect() {
+  state.autoConnect = false;
+  saveSettings();
+  appendLog("extension", "auto connect off");
+  disconnect();
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.autoConnect, String(state.autoConnect));
+    localStorage.setItem(STORAGE_KEYS.endpoint, els.endpoint.value.trim());
+  } catch {
+    // Extension storage is best-effort for popup convenience only.
+  }
+}
+
+function loadSettings() {
+  try {
+    const endpoint = localStorage.getItem(STORAGE_KEYS.endpoint);
+    if (endpoint) {
+      els.endpoint.value = endpoint;
+    }
+    state.autoConnect = localStorage.getItem(STORAGE_KEYS.autoConnect) === "true";
+  } catch {
+    state.autoConnect = false;
+  }
+}
+
+els.autoConnect.addEventListener("change", () => {
+  if (els.autoConnect.checked) {
+    startAutoConnect();
+  } else {
+    stopAutoConnect();
+  }
+});
+
+els.endpoint.addEventListener("input", saveSettings);
+
+loadSettings();
+if (state.autoConnect) {
+  startAutoConnect();
+} else {
+  renderControls();
+}
