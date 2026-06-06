@@ -1,16 +1,10 @@
-import TurndownService from "turndown";
+import { articleBodyChildrenToMarkdown } from "./article-markdown.js";
 import { markdownTokens } from "./markdown-tokens.js";
 
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
 const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
 const BODY_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[5]/div/div";
 const LISTENER_INSTALLED_KEY = "__remoteEditBridgeContentListenerInstalled";
-
-const turndown = new TurndownService({
-  codeBlockStyle: "fenced",
-  headingStyle: "atx",
-});
-turndown.escape = (text) => text;
 
 function runtimeApi() {
   return globalThis.browser?.runtime || globalThis.chrome?.runtime;
@@ -63,10 +57,7 @@ function readBody() {
     );
   }
 
-  const html = Array.from(bodyElement.children)
-    .map((child) => child.outerHTML)
-    .join("\n");
-  return turndown.turndown(html).trim();
+  return articleBodyChildrenToMarkdown(bodyElement.children);
 }
 
 function createInputEvent(type, inputType, data = null) {
