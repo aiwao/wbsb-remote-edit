@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Greet WebSocket Bridge",
+  "description": "Send names to the local greet-ws CLI and receive greetings.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Greet WS",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "*://localhost/*",
+    "*://127.0.0.1/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "greet-ws-bridge@wbsb-remote-edit.local",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      },
+      "strict_min_version": "109.0"
+    }
+  }
+}

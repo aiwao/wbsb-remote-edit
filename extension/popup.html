@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Greet WS</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="topbar">
+        <h1>Greet WS</h1>
+        <span id="status" class="status is-offline">Offline</span>
+      </header>
+
+      <label class="field">
+        <span>Endpoint</span>
+        <input id="endpoint" type="url" value="ws://127.0.0.1:8787/ws" spellcheck="false" />
+      </label>
+
+      <div class="controls">
+        <button id="connect" type="button">Connect</button>
+        <button id="disconnect" type="button" class="secondary" disabled>Disconnect</button>
+      </div>
+
+      <form id="greet-form" class="greet-form">
+        <label class="field">
+          <span>Name</span>
+          <input id="name" type="text" autocomplete="name" placeholder="Ada" />
+        </label>
+        <button id="send" type="submit">Send</button>
+      </form>
+
+      <output id="greeting" class="greeting">No greeting yet</output>
+
+      <section class="log-shell" aria-label="Message log">
+        <div id="log" class="log"></div>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
