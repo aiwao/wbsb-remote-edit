@@ -3,7 +3,6 @@ import TurndownService from "turndown";
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
 const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
 const BODY_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[5]/div/div";
-const BODY_EDITOR_SELECTOR = '[contenteditable="true"][aria-label="記事本文"]';
 const LISTENER_INSTALLED_KEY = "__remoteEditBridgeContentListenerInstalled";
 
 const turndown = new TurndownService({
@@ -102,9 +101,9 @@ function setTitle(title) {
 }
 
 function setBody(body) {
-  const editor = document.querySelector(BODY_EDITOR_SELECTOR);
-  if (!editor) {
-    throw new Error(`body editor was not found with selector ${BODY_EDITOR_SELECTOR}`);
+  const editor = firstXPathNode(BODY_XPATH);
+  if (!editor || editor.nodeType !== Node.ELEMENT_NODE) {
+    throw new Error(`body editor was not found at ${BODY_XPATH}; got ${nodeDescription(editor)}`);
   }
 
   editor.focus();
