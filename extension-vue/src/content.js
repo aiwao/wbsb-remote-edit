@@ -9,6 +9,7 @@ const turndown = new TurndownService({
   codeBlockStyle: "fenced",
   headingStyle: "atx",
 });
+turndown.escape = (text) => text;
 
 function runtimeApi() {
   return globalThis.browser?.runtime || globalThis.chrome?.runtime;
