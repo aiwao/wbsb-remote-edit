@@ -1,17 +1,35 @@
 import { describe, expect, it } from "vite-plus/test";
 import { articleBodyChildrenToMarkdown } from "./article-markdown.js";
 
-function articleChild({
-  editorUiRemoved,
-  hasDescendant = false,
-  html,
-  matches = false,
-  text = "",
-}) {
+function selectorTagNames(selector) {
+  return selector
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => /^[a-z][a-z0-9-]*$/.test(part));
+}
+
+function rootTagName(html) {
+  return /^<([a-z][a-z0-9-]*)[\s>]/i.exec(html)?.[1].toLowerCase() || "";
+}
+
+function htmlContainsTag(html, tagName) {
+  return new RegExp(`<${tagName}(?:\\s|>|/)`, "i").test(html);
+}
+
+function htmlMatchesSelector(selector, html) {
+  const rootTag = rootTagName(html);
+  return selectorTagNames(selector).includes(rootTag);
+}
+
+function htmlQuerySelector(selector, html) {
+  return selectorTagNames(selector).some((tagName) => htmlContainsTag(html, tagName)) ? {} : null;
+}
+
+function articleChild({ editorUiRemoved, hasDescendant = false, html, matches, text = "" }) {
   const element = {
-    matches: () => matches,
+    matches: (selector) => matches ?? htmlMatchesSelector(selector, html),
     outerHTML: html,
-    querySelector: () => (hasDescendant ? {} : null),
+    querySelector: (selector) => (hasDescendant ? {} : htmlQuerySelector(selector, html)),
     querySelectorAll: () => [],
     textContent: text,
   };
@@ -69,6 +87,19 @@ describe("articleBodyChildrenToMarkdown", () => {
     ]);
 
     expect(markdown).toBe("```js\nconsole.log(1)\n```");
+  });
+
+  it("preserves a blank markdown line after a list", () => {
+    const markdown = articleBodyChildrenToMarkdown([
+      articleChild({
+        html: '<ul class="tight" data-tight="true"><li><p>first</p></li></ul>',
+        text: "first",
+      }),
+      articleChild({ html: '<p><br class="ProseMirror-trailingBreak"></p>' }),
+      articleChild({ html: "<p>next</p>", text: "next" }),
+    ]);
+
+    expect(markdown).toBe("* first\n\nnext");
   });
 
   it("converts tight ProseMirror article blocks without blank lines after every line", () => {

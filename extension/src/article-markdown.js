@@ -17,6 +17,8 @@ const TEXTLESS_MARKDOWN_SELECTOR = [
   "video",
 ].join(",");
 const ARTICLE_EDITOR_UI_SELECTOR = "select";
+const BLANK_LINE_MARKER_ATTRIBUTE = "data-wbsb-blank-line";
+const BLANK_LINE_MARKER_HTML = `<p ${BLANK_LINE_MARKER_ATTRIBUTE}="true">x</p>`;
 
 const turndown = new TurndownService({
   codeBlockStyle: "fenced",
@@ -62,6 +64,14 @@ turndown.addRule("wbsbListItem", {
     return `${prefix}${itemContent}${node.nextSibling ? "\n" : ""}`;
   },
 });
+turndown.addRule("wbsbBlankLine", {
+  filter(node) {
+    return node.getAttribute(BLANK_LINE_MARKER_ATTRIBUTE) === "true";
+  },
+  replacement() {
+    return "\n\n";
+  },
+});
 
 function normalizedTextContent(element) {
   return (element.textContent || "").replace(/\u00a0/g, " ").trim();
@@ -78,6 +88,44 @@ function isBlankArticleBodyChild(element) {
   return normalizedTextContent(element) === "" && !hasTextlessMarkdownElement(element);
 }
 
+function isBlankLineParagraph(element) {
+  return (
+    element.matches("p") &&
+    normalizedTextContent(element) === "" &&
+    Boolean(element.querySelector("br")) &&
+    !hasTextlessMarkdownElement(element)
+  );
+}
+
+function isListElement(element) {
+  return element.matches("ul,ol");
+}
+
+function previousNonBlankArticleBodyChild(children, index) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (!isBlankArticleBodyChild(children[cursor])) {
+      return children[cursor];
+    }
+  }
+  return null;
+}
+
+function hasLaterNonBlankArticleBodyChild(children, index) {
+  return children.slice(index + 1).some((child) => !isBlankArticleBodyChild(child));
+}
+
+function shouldPreserveBlankLineAfterList(children, index) {
+  if (
+    !isBlankLineParagraph(children[index]) ||
+    !hasLaterNonBlankArticleBodyChild(children, index)
+  ) {
+    return false;
+  }
+
+  const previousChild = previousNonBlankArticleBodyChild(children, index);
+  return Boolean(previousChild && isListElement(previousChild));
+}
+
 function cloneArticleBodyChildWithoutEditorUi(element) {
   const clone = element.cloneNode(true);
   clone.querySelectorAll(ARTICLE_EDITOR_UI_SELECTOR).forEach((editorUiElement) => {
@@ -86,11 +134,24 @@ function cloneArticleBodyChildWithoutEditorUi(element) {
   return clone;
 }
 
+function articleBodyChildHtml(child, index, children) {
+  if (shouldPreserveBlankLineAfterList(children, index)) {
+    return BLANK_LINE_MARKER_HTML;
+  }
+
+  if (isBlankArticleBodyChild(child)) {
+    return "";
+  }
+
+  return child.outerHTML;
+}
+
 export function articleBodyChildrenToMarkdown(children) {
-  const html = Array.from(children)
-    .map((child) => cloneArticleBodyChildWithoutEditorUi(child))
-    .filter((child) => !isBlankArticleBodyChild(child))
-    .map((child) => child.outerHTML)
+  const normalizedChildren = Array.from(children).map((child) =>
+    cloneArticleBodyChildWithoutEditorUi(child),
+  );
+  const html = normalizedChildren
+    .map((child, index) => articleBodyChildHtml(child, index, normalizedChildren))
     .join("");
 
   return turndown.turndown(html).trim();
