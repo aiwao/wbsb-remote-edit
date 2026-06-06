@@ -73,7 +73,13 @@ function handleMessage(event) {
   if (message.type === "edit") {
     editTitle.value = message.title || "Untitled";
     editContent.value = message.body || "";
-    sendAck(message);
+    writeWBSBArticle(message)
+      .then(() => {
+        sendAck(message);
+      })
+      .catch((error) => {
+        appendLog("extension", toErrorMessage(error));
+      });
   }
 
   appendLog(message.from || "CLI", messageText(message));
@@ -211,16 +217,16 @@ function isMissingContentScriptError(error) {
   );
 }
 
-async function sendArticleReadMessage(tabId) {
+async function sendContentMessage(tabId, message) {
   try {
-    return await sendTabMessage(tabId, { type: "read_wbsb_article" });
+    return await sendTabMessage(tabId, message);
   } catch (error) {
     if (!isMissingContentScriptError(error)) {
       throw error;
     }
 
     await executeContentScript(tabId);
-    return sendTabMessage(tabId, { type: "read_wbsb_article" });
+    return sendTabMessage(tabId, message);
   }
 }
 
@@ -230,12 +236,32 @@ async function readWBSBArticle() {
     throw new Error("active tab is unavailable");
   }
 
-  const response = await sendArticleReadMessage(tab.id);
+  const response = await sendContentMessage(tab.id, { type: "read_wbsb_article" });
   if (!response?.ok) {
     throw new Error(response?.error || "could not read WBSB article");
   }
 
   return response.article;
+}
+
+async function writeWBSBArticle(message) {
+  const tab = await queryActiveTab();
+  if (!tab?.id) {
+    throw new Error("active tab is unavailable");
+  }
+
+  const response = await sendContentMessage(tab.id, {
+    article: {
+      body: message.body || "",
+      title: message.title || "",
+    },
+    type: "write_wbsb_article",
+  });
+  if (!response?.ok) {
+    throw new Error(response?.error || "could not write WBSB article");
+  }
+
+  appendLog("WBSB", "inserted edit");
 }
 
 function connect() {
