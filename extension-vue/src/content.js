@@ -107,7 +107,26 @@ function insertEditorText(editor, text) {
   dispatchTextInput(editor, "insertText", text);
 }
 
+function createEnterKeyEvent(type) {
+  return new KeyboardEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    code: "Enter",
+    key: "Enter",
+    keyCode: 13,
+    which: 13,
+  });
+}
+
 function insertEditorParagraph(editor) {
+  const keydownEvent = createEnterKeyEvent("keydown");
+  const wasNotCanceled = editor.dispatchEvent(keydownEvent);
+  editor.dispatchEvent(createEnterKeyEvent("keyup"));
+
+  if (!wasNotCanceled || keydownEvent.defaultPrevented) {
+    return;
+  }
+
   if (!dispatchBeforeInput(editor, "insertParagraph")) {
     return;
   }
@@ -179,12 +198,15 @@ async function insertList(editor, token, shouldCreateFollowingParagraph) {
   await typeIntoEditor(editor, `${token.marker} ${firstItem}`);
   for (const item of remainingItems) {
     insertEditorParagraph(editor);
+    await waitForEditorTick(0);
     await typeIntoEditor(editor, item);
   }
 
   if (shouldCreateFollowingParagraph) {
     insertEditorParagraph(editor);
+    await waitForEditorTick(0);
     insertEditorParagraph(editor);
+    await waitForEditorTick(0);
   }
 }
 
