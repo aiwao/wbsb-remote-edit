@@ -1,4 +1,5 @@
 import TurndownService from "turndown";
+import { markdownTokens } from "./markdown-tokens.js";
 
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
 const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
@@ -123,36 +124,9 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function markdownTokens(markdown) {
-  const tokens = [];
-  const fencePattern = /(^|\n)```([^\n`]*)\n([\s\S]*?)\n```[^\S\n]*(?=\n|$)/g;
-  let cursor = 0;
-  let match;
-
-  while ((match = fencePattern.exec(markdown))) {
-    const fenceStart = match.index + match[1].length;
-    if (cursor < fenceStart) {
-      tokens.push({ text: markdown.slice(cursor, fenceStart), type: "text" });
-    }
-
-    tokens.push({
-      code: match[3],
-      language: match[2].trim().split(/\s+/)[0] || "",
-      type: "code",
-    });
-    cursor = fencePattern.lastIndex;
-  }
-
-  if (cursor < markdown.length) {
-    tokens.push({ text: markdown.slice(cursor), type: "text" });
-  }
-
-  return tokens;
-}
-
 function hasLaterContent(tokens, index) {
   return tokens.slice(index + 1).some((token) => {
-    if (token.type === "code") {
+    if (token.type !== "text") {
       return true;
     }
     return token.text.replace(/\n/g, "").length > 0;
@@ -199,6 +173,21 @@ function insertCodeBlock(editor, token, shouldCreateFollowingParagraph) {
   pasteHtml(editor, html, token.code);
 }
 
+async function insertList(editor, token, shouldCreateFollowingParagraph) {
+  const [firstItem = "", ...remainingItems] = token.items;
+
+  await typeIntoEditor(editor, `${token.marker} ${firstItem}`);
+  for (const item of remainingItems) {
+    insertEditorParagraph(editor);
+    await typeIntoEditor(editor, item);
+  }
+
+  if (shouldCreateFollowingParagraph) {
+    insertEditorParagraph(editor);
+    insertEditorParagraph(editor);
+  }
+}
+
 function waitForEditorTick(index) {
   if (index % 50 !== 0) {
     return Promise.resolve();
@@ -231,7 +220,11 @@ async function typeMarkdownIntoEditor(editor, markdown) {
     }
 
     const shouldCreateFollowingParagraph = hasLaterContent(tokens, index);
-    insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
+    if (token.type === "list") {
+      await insertList(editor, token, shouldCreateFollowingParagraph);
+    } else {
+      insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
+    }
     if (shouldCreateFollowingParagraph) {
       consumeLeadingParagraphBreak(tokens, index);
     }
