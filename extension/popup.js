@@ -9,10 +9,8 @@ const els = {
   status: document.querySelector("#status"),
   connect: document.querySelector("#connect"),
   disconnect: document.querySelector("#disconnect"),
-  form: document.querySelector("#greet-form"),
-  name: document.querySelector("#name"),
-  send: document.querySelector("#send"),
-  greeting: document.querySelector("#greeting"),
+  editTitle: document.querySelector("#edit-title"),
+  editContent: document.querySelector("#edit-content"),
   log: document.querySelector("#log"),
 };
 
@@ -27,7 +25,6 @@ function renderControls() {
 
   els.connect.disabled = connected || connecting;
   els.disconnect.disabled = !connected && !connecting;
-  els.send.disabled = connecting;
 }
 
 function appendLog(source, text) {
@@ -54,8 +51,8 @@ function appendLog(source, text) {
 }
 
 function messageText(message) {
-  if (message.greeting) {
-    return message.greeting;
+  if (message.type === "edit") {
+    return message.title || "untitled edit";
   }
   if (message.error) {
     return message.error;
@@ -72,8 +69,9 @@ function handleMessage(event) {
     return;
   }
 
-  if (message.type === "greet" && message.greeting) {
-    els.greeting.textContent = message.greeting;
+  if (message.type === "edit") {
+    els.editTitle.textContent = message.title || "Untitled";
+    els.editContent.textContent = message.content || "";
   }
 
   appendLog(message.from || "CLI", messageText(message));
@@ -136,23 +134,9 @@ function disconnect() {
   renderControls();
 }
 
-async function sendGreeting(event) {
-  event.preventDefault();
-
-  const name = els.name.value.trim();
-  const socket = await connect();
-  socket.send(JSON.stringify({ type: "greet", name }));
-  appendLog("extension", `name: ${name || "there"}`);
-}
-
 els.connect.addEventListener("click", () => {
   connect().catch(() => {});
 });
 els.disconnect.addEventListener("click", disconnect);
-els.form.addEventListener("submit", (event) => {
-  sendGreeting(event).catch((error) => {
-    appendLog("extension", error.message);
-  });
-});
 
 renderControls();

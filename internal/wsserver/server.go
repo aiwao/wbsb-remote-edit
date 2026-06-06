@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aiwao/wbsb-remote-edit/internal/greet"
 	"github.com/gorilla/websocket"
 )
 
@@ -31,6 +30,8 @@ type Server struct {
 	logger         *log.Logger
 	hub            *hub
 	upgrader       websocket.Upgrader
+	latestMu       sync.Mutex
+	latestEdit     *Message
 }
 
 func New(config Config) *Server {
@@ -76,15 +77,23 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	listener, err := net.Listen("tcp", s.addr)
+	if err != nil {
+		return err
+	}
+
+	return s.Serve(ctx, listener)
+}
+
+func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 	httpServer := &http.Server{
-		Addr:              s.addr,
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	errs := make(chan error, 1)
 	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errs <- err
 		}
 		close(errs)
@@ -103,15 +112,16 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) BroadcastGreeting(name string) {
-	name = strings.TrimSpace(name)
-	s.hub.broadcast(Message{
-		Type:     "greet",
-		Name:     name,
-		Greeting: greet.Greet(name),
-		From:     "cli",
-		At:       now(),
-	})
+func (s *Server) BroadcastEdit(title, content string) {
+	message := Message{
+		Type:    "edit",
+		Title:   strings.TrimSpace(title),
+		Content: content,
+		From:    "cli",
+		At:      now(),
+	}
+	s.rememberEdit(message)
+	s.hub.broadcast(message)
 }
 
 func (s *Server) ClientCount() int {
@@ -125,7 +135,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprintf(w, "greet-ws is running. Connect to ws://%s%s\n", s.addr, s.path)
+	fmt.Fprintf(w, "remote edit websocket server is running. Connect to ws://%s%s\n", s.addr, s.path)
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -144,10 +154,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	go client.writeLoop()
 
 	client.send <- Message{
-		Type:     "connected",
-		Greeting: "Connected to greet-ws CLI.",
-		From:     "cli",
-		At:       now(),
+		Type: "connected",
+		From: "cli",
+		At:   now(),
+	}
+	if latest, ok := s.lastEdit(); ok {
+		client.send <- latest
 	}
 
 	s.readLoop(client)
@@ -172,14 +184,12 @@ func (s *Server) readLoop(client *client) {
 
 func (s *Server) reply(message Message) Message {
 	switch strings.ToLower(strings.TrimSpace(message.Type)) {
-	case "greet":
-		name := strings.TrimSpace(message.Name)
+	case "edit":
+		s.BroadcastEdit(message.Title, message.Content)
 		return Message{
-			Type:     "greet",
-			Name:     name,
-			Greeting: greet.Greet(name),
-			From:     "cli",
-			At:       now(),
+			Type: "ok",
+			From: "cli",
+			At:   now(),
 		}
 	case "ping":
 		return Message{
@@ -195,6 +205,23 @@ func (s *Server) reply(message Message) Message {
 			At:    now(),
 		}
 	}
+}
+
+func (s *Server) rememberEdit(message Message) {
+	s.latestMu.Lock()
+	defer s.latestMu.Unlock()
+
+	s.latestEdit = &message
+}
+
+func (s *Server) lastEdit() (Message, bool) {
+	s.latestMu.Lock()
+	defer s.latestMu.Unlock()
+
+	if s.latestEdit == nil {
+		return Message{}, false
+	}
+	return *s.latestEdit, true
 }
 
 func (s *Server) checkOrigin(r *http.Request) bool {

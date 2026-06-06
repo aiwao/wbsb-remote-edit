@@ -3,12 +3,12 @@ package wsserver
 import "time"
 
 type Message struct {
-	Type     string `json:"type"`
-	Name     string `json:"name,omitempty"`
-	Greeting string `json:"greeting,omitempty"`
-	Error    string `json:"error,omitempty"`
-	From     string `json:"from,omitempty"`
-	At       string `json:"at,omitempty"`
+	Type    string `json:"type"`
+	Title   string `json:"title,omitempty"`
+	Content string `json:"content,omitempty"`
+	Error   string `json:"error,omitempty"`
+	From    string `json:"from,omitempty"`
+	At      string `json:"at,omitempty"`
 }
 
 func now() string {

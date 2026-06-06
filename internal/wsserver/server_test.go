@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestWebSocketGreet(t *testing.T) {
+func TestWebSocketEdit(t *testing.T) {
 	server := New(Config{})
 	testServer := httptest.NewServer(server.Handler())
 	defer testServer.Close()
@@ -19,17 +19,20 @@ func TestWebSocketGreet(t *testing.T) {
 
 	readUntil(t, conn, "connected")
 
-	if err := conn.WriteJSON(Message{Type: "greet", Name: "Ada"}); err != nil {
-		t.Fatalf("write greet message: %v", err)
+	if err := conn.WriteJSON(Message{Type: "edit", Title: "Draft", Content: "Hello from editor"}); err != nil {
+		t.Fatalf("write edit message: %v", err)
 	}
 
-	got := readUntil(t, conn, "greet")
-	if got.Greeting != "Hello, Ada!" {
-		t.Fatalf("Greeting = %q, want %q", got.Greeting, "Hello, Ada!")
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Draft" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Draft")
+	}
+	if got.Content != "Hello from editor" {
+		t.Fatalf("Content = %q, want %q", got.Content, "Hello from editor")
 	}
 }
 
-func TestBroadcastGreeting(t *testing.T) {
+func TestBroadcastEdit(t *testing.T) {
 	server := New(Config{})
 	testServer := httptest.NewServer(server.Handler())
 	defer testServer.Close()
@@ -38,14 +41,36 @@ func TestBroadcastGreeting(t *testing.T) {
 	defer conn.Close()
 
 	readUntil(t, conn, "connected")
-	server.BroadcastGreeting("Grace")
+	server.BroadcastEdit("Release notes", "Ship it")
 
-	got := readUntil(t, conn, "greet")
-	if got.Greeting != "Hello, Grace!" {
-		t.Fatalf("Greeting = %q, want %q", got.Greeting, "Hello, Grace!")
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Release notes" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Release notes")
+	}
+	if got.Content != "Ship it" {
+		t.Fatalf("Content = %q, want %q", got.Content, "Ship it")
 	}
 	if got.From != "cli" {
 		t.Fatalf("From = %q, want %q", got.From, "cli")
+	}
+}
+
+func TestLatestEditSentOnConnect(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	server.BroadcastEdit("Existing draft", "Already written")
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	got := readUntil(t, conn, "edit")
+	if got.Title != "Existing draft" {
+		t.Fatalf("Title = %q, want %q", got.Title, "Existing draft")
+	}
+	if got.Content != "Already written" {
+		t.Fatalf("Content = %q, want %q", got.Content, "Already written")
 	}
 }
 
