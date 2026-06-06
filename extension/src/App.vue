@@ -10,8 +10,6 @@ const STORAGE_KEYS = {
 
 const endpoint = ref(DEFAULT_ENDPOINT);
 const autoConnect = ref(false);
-const statusLabel = ref("Offline");
-const statusTone = ref("is-offline");
 const isConnected = ref(false);
 const isConnecting = ref(false);
 const editTitle = ref("No edit yet");
@@ -25,11 +23,6 @@ let retryTimer = null;
 const endpointDisabled = computed(
   () => autoConnect.value || isConnected.value || isConnecting.value,
 );
-
-function setStatus(label, tone) {
-  statusLabel.value = label;
-  statusTone.value = tone;
-}
 
 function appendLog(source, text) {
   logEntries.value = [
@@ -272,7 +265,6 @@ function connect() {
     return connecting;
   }
 
-  setStatus("Connecting", "is-connecting");
   isConnecting.value = true;
 
   let nextSocket;
@@ -282,7 +274,6 @@ function connect() {
     socket = null;
     isConnected.value = false;
     isConnecting.value = false;
-    setStatus("Error", "is-error");
     appendLog("extension", toErrorMessage(error));
     return Promise.reject(error);
   }
@@ -303,7 +294,6 @@ function connect() {
       isConnected.value = true;
       isConnecting.value = false;
       clearRetry();
-      setStatus("Online", "is-online");
       appendLog("extension", "connected");
       resolve(nextSocket);
     });
@@ -322,11 +312,9 @@ function connect() {
       isConnecting.value = false;
 
       if (autoConnect.value) {
-        setStatus("Retrying", "is-connecting");
         appendLog("extension", "disconnected; retrying");
         scheduleReconnect();
       } else {
-        setStatus("Offline", "is-offline");
         appendLog("extension", "disconnected");
       }
 
@@ -336,7 +324,6 @@ function connect() {
     });
 
     nextSocket.addEventListener("error", () => {
-      setStatus("Error", "is-error");
       appendLog("extension", "connection error");
       isConnecting.value = Boolean(connecting);
     });
@@ -355,7 +342,6 @@ function disconnect() {
   connecting = null;
   isConnected.value = false;
   isConnecting.value = false;
-  setStatus("Offline", "is-offline");
 }
 
 function scheduleReconnect() {
@@ -454,7 +440,6 @@ onBeforeUnmount(() => {
   <main class="popup">
     <header class="topbar">
       <h1>Remote Edit</h1>
-      <span class="status" :class="statusTone" aria-live="polite">{{ statusLabel }}</span>
     </header>
 
     <label class="field">
