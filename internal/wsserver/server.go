@@ -159,15 +159,15 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 	}
 }
 
-func (s *Server) BroadcastEdit(title, content string) Message {
-	message := s.newEditMessage(title, content)
+func (s *Server) BroadcastEdit(title, body string) Message {
+	message := s.newEditMessage(title, body)
 	s.rememberEdit(message)
 	s.hub.broadcast(message)
 	return message
 }
 
-func (s *Server) BroadcastEditAndWait(ctx context.Context, title, content string) (DeliveryResult, error) {
-	message := s.newEditMessage(title, content)
+func (s *Server) BroadcastEditAndWait(ctx context.Context, title, body string) (DeliveryResult, error) {
+	message := s.newEditMessage(title, body)
 	waiter := &deliveryWaiter{
 		id:      message.ID,
 		targets: make(map[*client]struct{}),
@@ -291,7 +291,7 @@ func (s *Server) readLoop(client *client) {
 func (s *Server) reply(client *client, message Message) (Message, bool) {
 	switch strings.ToLower(strings.TrimSpace(message.Type)) {
 	case "edit":
-		s.BroadcastEdit(message.Title, message.Content)
+		s.BroadcastEdit(message.Title, message.Body)
 		return Message{
 			Type: "ok",
 			From: "cli",
@@ -344,14 +344,14 @@ func (s *Server) nextArticleRequestID() string {
 	return "article-" + strconv.FormatUint(s.nextArticleID, 10)
 }
 
-func (s *Server) newEditMessage(title, content string) Message {
+func (s *Server) newEditMessage(title, body string) Message {
 	return Message{
-		Type:    "edit",
-		ID:      s.nextEditID(),
-		Title:   strings.TrimSpace(title),
-		Content: content,
-		From:    "cli",
-		At:      now(),
+		Type:  "edit",
+		ID:    s.nextEditID(),
+		Title: strings.TrimSpace(title),
+		Body:  body,
+		From:  "cli",
+		At:    now(),
 	}
 }
 

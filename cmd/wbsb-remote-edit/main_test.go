@@ -60,10 +60,10 @@ func TestNormalizeEndpointPath(t *testing.T) {
 	}
 }
 
-func TestCaptureEditorContentUsesEditorCommand(t *testing.T) {
+func TestCaptureEditorBodyUsesEditorCommand(t *testing.T) {
 	editor := `sh -c 'test "$(cat "$1")" = "seed content" && printf "updated content" > "$1"' sh`
 
-	got, err := captureEditorContent(
+	got, err := captureEditorBody(
 		context.Background(),
 		editor,
 		"seed content",
@@ -79,10 +79,10 @@ func TestCaptureEditorContentUsesEditorCommand(t *testing.T) {
 	}
 }
 
-func TestCaptureEditorContentRequiresEditor(t *testing.T) {
+func TestCaptureEditorBodyRequiresEditor(t *testing.T) {
 	t.Setenv("EDITOR", "")
 
-	_, err := captureEditorContent(
+	_, err := captureEditorBody(
 		context.Background(),
 		"",
 		"",

@@ -5,7 +5,7 @@ Browser extension popup and a Go/Cobra CLI communicate over WebSocket.
 The CLI sends:
 
 ```json
-{ "type": "edit", "title": "Draft", "content": "Text written in the editor", "from": "cli" }
+{ "type": "edit", "title": "Draft", "body": "Text written in the editor", "from": "cli" }
 ```
 
 Before opening the editor, the CLI requests the current article from the extension:

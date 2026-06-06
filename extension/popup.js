@@ -89,7 +89,7 @@ function handleMessage(event) {
 
   if (message.type === "edit") {
     els.editTitle.textContent = message.title || "Untitled";
-    els.editContent.textContent = message.content || "";
+    els.editContent.textContent = message.body || "";
     sendAck(message);
   }
 

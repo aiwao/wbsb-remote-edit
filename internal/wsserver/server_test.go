@@ -20,7 +20,7 @@ func TestWebSocketEdit(t *testing.T) {
 
 	readUntil(t, conn, "connected")
 
-	if err := conn.WriteJSON(Message{Type: "edit", Title: "Draft", Content: "Hello from editor"}); err != nil {
+	if err := conn.WriteJSON(Message{Type: "edit", Title: "Draft", Body: "Hello from editor"}); err != nil {
 		t.Fatalf("write edit message: %v", err)
 	}
 
@@ -28,8 +28,8 @@ func TestWebSocketEdit(t *testing.T) {
 	if got.Title != "Draft" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Draft")
 	}
-	if got.Content != "Hello from editor" {
-		t.Fatalf("Content = %q, want %q", got.Content, "Hello from editor")
+	if got.Body != "Hello from editor" {
+		t.Fatalf("Body = %q, want %q", got.Body, "Hello from editor")
 	}
 }
 
@@ -48,8 +48,8 @@ func TestBroadcastEdit(t *testing.T) {
 	if got.Title != "Release notes" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Release notes")
 	}
-	if got.Content != "Ship it" {
-		t.Fatalf("Content = %q, want %q", got.Content, "Ship it")
+	if got.Body != "Ship it" {
+		t.Fatalf("Body = %q, want %q", got.Body, "Ship it")
 	}
 	if got.From != "cli" {
 		t.Fatalf("From = %q, want %q", got.From, "cli")
@@ -73,8 +73,8 @@ func TestLatestEditSentOnConnect(t *testing.T) {
 	if got.Title != "Existing draft" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Existing draft")
 	}
-	if got.Content != "Already written" {
-		t.Fatalf("Content = %q, want %q", got.Content, "Already written")
+	if got.Body != "Already written" {
+		t.Fatalf("Body = %q, want %q", got.Body, "Already written")
 	}
 }
 

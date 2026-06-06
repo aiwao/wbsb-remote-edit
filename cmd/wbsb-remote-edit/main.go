@@ -88,7 +88,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 			}
 			fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(article.Body)))
 
-			content, err := captureEditorContent(ctx, editor, article.Body, stdin, stdout, stderr)
+			body, err := captureEditorBody(ctx, editor, article.Body, stdin, stdout, stderr)
 			if err != nil {
 				stop()
 				<-serverErr
@@ -99,9 +99,9 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 				stdout,
 				"sending edit %q (%d byte(s)); waiting for browser acknowledgement\n",
 				title,
-				len([]byte(content)),
+				len([]byte(body)),
 			)
-			result, err := server.BroadcastEditAndWait(ctx, title, content)
+			result, err := server.BroadcastEditAndWait(ctx, title, body)
 			stop()
 			serverRunErr := <-serverErr
 
@@ -145,10 +145,10 @@ func normalizeEndpointPath(path string) string {
 	return path
 }
 
-func captureEditorContent(
+func captureEditorBody(
 	ctx context.Context,
 	editor string,
-	initialContent string,
+	initialBody string,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
 ) (string, error) {
@@ -166,7 +166,7 @@ func captureEditorContent(
 	}
 	defer os.Remove(file.Name())
 
-	if _, err := file.WriteString(initialContent); err != nil {
+	if _, err := file.WriteString(initialBody); err != nil {
 		file.Close()
 		return "", err
 	}
@@ -179,12 +179,12 @@ func captureEditorContent(
 		return "", err
 	}
 
-	content, err := os.ReadFile(file.Name())
+	body, err := os.ReadFile(file.Name())
 	if err != nil {
 		return "", err
 	}
 
-	return string(content), nil
+	return string(body), nil
 }
 
 func runEditor(
