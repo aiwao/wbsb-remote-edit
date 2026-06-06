@@ -192,6 +192,12 @@ function insertCodeBlock(editor, token, shouldCreateFollowingParagraph) {
   pasteHtml(editor, html, token.code);
 }
 
+function insertThematicBreak(editor, token, shouldCreateFollowingParagraph) {
+  const followingParagraph = shouldCreateFollowingParagraph ? "<p><br></p>" : "";
+
+  pasteHtml(editor, `<hr>${followingParagraph}`, token.markdown);
+}
+
 async function insertList(editor, token, shouldCreateFollowingParagraph) {
   const [firstItem = "", ...remainingItems] = token.items;
 
@@ -244,6 +250,8 @@ async function typeMarkdownIntoEditor(editor, markdown) {
     const shouldCreateFollowingParagraph = hasLaterContent(tokens, index);
     if (token.type === "list") {
       await insertList(editor, token, shouldCreateFollowingParagraph);
+    } else if (token.type === "thematicBreak") {
+      insertThematicBreak(editor, token, shouldCreateFollowingParagraph);
     } else {
       insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
     }
