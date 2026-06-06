@@ -3,6 +3,7 @@
 ## Project Specification
 
 - This project is a local remote-edit bridge between a Go/Cobra CLI and a Manifest V3 browser extension popup over WebSocket.
+- The Vue/Vite+ extension source lives in `extension/` and builds to `extension/dist/`.
 - The CLI entrypoint is `./cmd/wbsb-remote-edit`, and the user-facing command is:
 
 ```sh
@@ -47,11 +48,7 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit
 
 - The popup has a single auto-connect switch. While it is on, the popup should keep trying to connect to the configured WebSocket endpoint.
 - Endpoint and auto-connect state are stored in `localStorage` for popup convenience.
-- For now, `get_wbsb_article` returns debug data:
-
-```json
-{ "title": "ABCDEFG", "body": "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz" }
-```
+- `get_wbsb_article` is handled on `*://wbsb.dev/articles/new*`; the content script reads the article title input and converts the article body HTML children to Markdown.
 
 ### Go Checks
 
@@ -64,10 +61,11 @@ nix develop --command go test ./...
 ## Browser Extension Checks
 
 - Use the Nix dev shell for extension tooling.
-- When changing files under `extension/`, run:
+- When changing files under `extension/`, build the Vue/Vite+ extension and lint the built Manifest V3 output:
 
 ```sh
-nix develop --command web-ext lint --source-dir extension
+nix develop --command sh -lc 'cd extension && pnpm run build'
+nix develop --command web-ext lint --source-dir extension/dist
 ```
 
 - Keep the extension compatible with both Chrome and Firefox. The shared Manifest V3 file should continue to pass `web-ext lint` with zero errors, warnings, and notices.

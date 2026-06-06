@@ -1,6 +1,6 @@
 # Remote Edit Bridge
 
-Browser extension popup and a Go/Cobra CLI communicate over WebSocket. The Vue/Vite+ extension lives in `extension-vue/` and builds to `extension-vue/dist/`.
+Browser extension popup and a Go/Cobra CLI communicate over WebSocket. The Vue/Vite+ extension lives in `extension/` and builds to `extension/dist/`.
 
 The CLI sends:
 
@@ -33,13 +33,13 @@ The command starts the local WebSocket server, waits for the extension to connec
 ## Build the Vue Extension
 
 ```sh
-nix develop --command sh -lc 'cd extension-vue && pnpm run build'
+nix develop --command sh -lc 'cd extension && pnpm run build'
 ```
 
 Validate the built Manifest V3 extension with:
 
 ```sh
-nix develop --command web-ext lint --source-dir extension-vue/dist
+nix develop --command web-ext lint --source-dir extension/dist
 ```
 
 ## Load in Chrome
@@ -47,14 +47,14 @@ nix develop --command web-ext lint --source-dir extension-vue/dist
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
 3. Click Load unpacked.
-4. Select the `extension-vue/dist/` directory in this repository.
+4. Select the `extension/dist/` directory in this repository.
 5. Open the extension popup and connect.
 
 ## Load in Firefox
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click Load Temporary Add-on.
-3. Select `extension-vue/dist/manifest.json` in this repository.
+3. Select `extension/dist/manifest.json` in this repository.
 4. Open the extension popup and connect.
 
 ## Browser Compatibility Notes
@@ -68,6 +68,6 @@ nix develop --command web-ext lint --source-dir extension-vue/dist
 ```sh
 nix develop --command go test ./...
 nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft" --addr 127.0.0.1:8787
-nix develop --command sh -lc 'cd extension-vue && pnpm run build'
-nix develop --command web-ext lint --source-dir extension-vue/dist
+nix develop --command sh -lc 'cd extension && pnpm run build'
+nix develop --command web-ext lint --source-dir extension/dist
 ```

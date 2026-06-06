@@ -1,5 +1,5 @@
 {
-  "name": "remote-edit-bridge-extension-vue",
+  "name": "remote-edit-bridge-extension",
   "version": "0.1.0",
   "private": true,
   "type": "module",
