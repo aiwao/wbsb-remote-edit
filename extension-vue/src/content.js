@@ -68,7 +68,91 @@ function readBody() {
   return turndown.turndown(html).trim();
 }
 
-function dispatchTextInput(element, inputType = "insertText") {
+function createInputEvent(type, inputType, data = null) {
+  return new InputEvent(type, {
+    bubbles: true,
+    cancelable: type === "beforeinput",
+    data,
+    inputType,
+  });
+}
+
+function dispatchTextInput(element, inputType = "insertText", data = null) {
+  element.dispatchEvent(createInputEvent("input", inputType, data));
+}
+
+function dispatchBeforeInput(element, inputType, data = null) {
+  return element.dispatchEvent(createInputEvent("beforeinput", inputType, data));
+}
+
+function selectNodeContents(node) {
+  const range = document.createRange();
+  range.selectNodeContents(node);
+
+  const selection = window.getSelection();
+  if (!selection) {
+    throw new Error("window selection is unavailable");
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function insertEditorText(editor, text) {
+  if (!dispatchBeforeInput(editor, "insertText", text)) {
+    return;
+  }
+
+  document.execCommand("insertText", false, text);
+  dispatchTextInput(editor, "insertText", text);
+}
+
+function insertEditorParagraph(editor) {
+  if (!dispatchBeforeInput(editor, "insertParagraph")) {
+    return;
+  }
+
+  document.execCommand("insertParagraph", false);
+  dispatchTextInput(editor, "insertParagraph");
+}
+
+function waitForEditorTick(index) {
+  if (index % 50 !== 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
+}
+
+async function typeIntoEditor(editor, text) {
+  for (const [index, character] of Array.from(text).entries()) {
+    if (character === "\n") {
+      insertEditorParagraph(editor);
+    } else {
+      insertEditorText(editor, character);
+    }
+
+    await waitForEditorTick(index);
+  }
+}
+
+function replaceEditorContentsWithText(editor, text) {
+  editor.focus();
+  selectNodeContents(editor);
+
+  if (!text) {
+    if (dispatchBeforeInput(editor, "deleteContentBackward")) {
+      document.execCommand("delete", false);
+      dispatchTextInput(editor, "deleteContentBackward");
+    }
+    return Promise.resolve();
+  }
+
+  return typeIntoEditor(editor, text);
+}
+
+function dispatchTitleInput(element, inputType = "insertText") {
   element.dispatchEvent(
     new InputEvent("input", {
       bubbles: true,
@@ -96,31 +180,18 @@ function setTitle(title) {
   const inserted = document.execCommand("insertText", false, title);
   if (!inserted || titleElement.value !== title) {
     titleElement.value = title;
-    dispatchTextInput(titleElement);
+    dispatchTitleInput(titleElement);
   }
   titleElement.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function setBody(body) {
+async function setBody(body) {
   const editor = firstXPathNode(BODY_XPATH);
   if (!editor || editor.nodeType !== Node.ELEMENT_NODE) {
     throw new Error(`body editor was not found at ${BODY_XPATH}; got ${nodeDescription(editor)}`);
   }
 
-  editor.focus();
-
-  const range = document.createRange();
-  range.selectNodeContents(editor);
-
-  const selection = window.getSelection();
-  if (!selection) {
-    throw new Error("window selection is unavailable");
-  }
-  selection.removeAllRanges();
-  selection.addRange(range);
-
-  document.execCommand("insertText", false, body);
-  dispatchTextInput(editor);
+  await replaceEditorContentsWithText(editor, body);
 }
 
 function readArticle() {
@@ -134,13 +205,13 @@ function readArticle() {
   };
 }
 
-function writeArticle(article) {
+async function writeArticle(article) {
   if (!isArticlePage()) {
     throw new Error(`this extension only writes ${ARTICLE_MATCH}`);
   }
 
   setTitle(article?.title || "");
-  setBody(article?.body || "");
+  await setBody(article?.body || "");
 }
 
 if (!globalThis[LISTENER_INSTALLED_KEY]) {
@@ -152,9 +223,17 @@ if (!globalThis[LISTENER_INSTALLED_KEY]) {
 
     try {
       if (message.type === "write_wbsb_article") {
-        writeArticle(message.article);
-        sendResponse({ ok: true });
-        return false;
+        writeArticle(message.article)
+          .then(() => {
+            sendResponse({ ok: true });
+          })
+          .catch((error) => {
+            sendResponse({
+              error: error instanceof Error ? error.message : String(error),
+              ok: false,
+            });
+          });
+        return true;
       }
 
       sendResponse({
