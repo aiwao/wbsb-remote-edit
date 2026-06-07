@@ -1,6 +1,43 @@
 import { defineConfig } from "vite-plus";
 import vue from "@vitejs/plugin-vue";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
+
+const projectVersion = process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromFlake();
+
+function readProjectVersionFromFlake() {
+  const flakePath = fileURLToPath(new URL("../flake.nix", import.meta.url));
+  const flake = readFileSync(flakePath, "utf8");
+  const versionMatch = flake.match(/\bversion\s*=\s*"([^"]+)";/);
+
+  if (!versionMatch) {
+    throw new Error(`Could not read project version from ${flakePath}`);
+  }
+
+  return versionMatch[1];
+}
+
+function manifestVersionPlugin() {
+  let distDir;
+
+  return {
+    name: "wbsb-remote-edit-manifest-version",
+    configResolved(config) {
+      distDir = path.isAbsolute(config.build.outDir)
+        ? config.build.outDir
+        : path.resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const manifestPath = fileURLToPath(new URL("./public/manifest.json", import.meta.url));
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      manifest.version = projectVersion;
+
+      mkdirSync(distDir, { recursive: true });
+      writeFileSync(path.join(distDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    },
+  };
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -24,7 +61,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [vue()],
+  plugins: [vue(), manifestVersionPlugin()],
   resolve: {
     alias: [
       {

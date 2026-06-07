@@ -2,7 +2,6 @@
   "manifest_version": 3,
   "name": "Remote Edit Bridge",
   "description": "Receive editor content from the local wbsb-remote-edit CLI.",
-  "version": "0.1.0",
   "action": {
     "default_title": "Remote Edit",
     "default_popup": "index.html"

@@ -1,0 +1,205 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(nix run .#version)"
+          if [ -z "${version}" ]; then
+            echo "::error::nix run .#version returned an empty version."
+            exit 1
+          fi
+          tag="v${version}"
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${version}"
+
+      - name: Stop if tag exists
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists."
+            exit 1
+          fi
+
+      - name: Build with Nix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p build
+          nix build .# -o build/release
+
+      - name: Prepare extension source
+        id: extension-source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_dir="$(readlink -f build/release)"
+          extension_src="${release_dir}/extension"
+          extension_dir="${RUNNER_TEMP}/wbsb-remote-edit-extension"
+
+          rm -rf "${extension_dir}"
+          cp -R "${extension_src}" "${extension_dir}"
+          chmod -R u+w "${extension_dir}"
+
+          echo "dir=${extension_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate extension
+        shell: bash
+        env:
+          EXTENSION_DIR: ${{ steps.extension-source.outputs.dir }}
+        run: |
+          set -euo pipefail
+
+          nix develop --command web-ext lint --source-dir "${EXTENSION_DIR}"
+
+      - name: Package CLI
+        id: cli
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          case "$(uname -m)" in
+            x86_64) arch="x86_64" ;;
+            aarch64 | arm64) arch="arm64" ;;
+            *) arch="$(uname -m)" ;;
+          esac
+
+          asset_name="wbsb-remote-edit-cli-${VERSION}-linux-${arch}.tar.gz"
+          cli_dir="${RUNNER_TEMP}/wbsb-remote-edit-cli"
+
+          rm -rf "${cli_dir}"
+          mkdir -p "${cli_dir}" artifacts
+          cp -L build/release/bin/wbsb-remote-edit "${cli_dir}/wbsb-remote-edit"
+          chmod 0755 "${cli_dir}/wbsb-remote-edit"
+          tar -C "${cli_dir}" -czf "artifacts/${asset_name}" wbsb-remote-edit
+
+          echo "asset=artifacts/${asset_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Package Firefox extension
+        id: firefox
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          EXTENSION_DIR: ${{ steps.extension-source.outputs.dir }}
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WEB_EXT_API_KEY}" ]; then
+            echo "::error::FIREFOX_API_KEY must contain the addons.mozilla.org API key / JWT issuer."
+            exit 1
+          fi
+          if [ -z "${WEB_EXT_API_SECRET}" ]; then
+            echo "::error::FIREFOX_API_SECRET must contain the addons.mozilla.org API secret / JWT secret."
+            exit 1
+          fi
+
+          asset_name="wbsb-remote-edit-firefox-${VERSION}.xpi"
+          signed_dir="${RUNNER_TEMP}/web-ext-signed"
+
+          rm -rf "${signed_dir}"
+          mkdir -p "${signed_dir}" artifacts
+          nix develop --command web-ext sign \
+            --api-key ${WEB_EXT_API_KEY} \
+            --api-secret ${WEB_EXT_API_SECRET} \
+            --source-dir "${EXTENSION_DIR}" \
+            --artifacts-dir "${signed_dir}" \
+            --channel unlisted
+
+          mapfile -t signed_xpis < <(find "${signed_dir}" -maxdepth 1 -type f -name '*.xpi' | sort)
+          if [ "${#signed_xpis[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one signed XPI in ${signed_dir}, found ${#signed_xpis[@]}."
+            exit 1
+          fi
+          mv "${signed_xpis[0]}" "artifacts/${asset_name}"
+
+          echo "asset=artifacts/${asset_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Package Chrome extension
+        id: chrome-extension
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          EXTENSION_DIR: ${{ steps.extension-source.outputs.dir }}
+        run: |
+          set -euo pipefail
+
+          asset_name="wbsb-remote-edit-chrome-${VERSION}.zip"
+          mkdir -p artifacts
+          (
+            cd "${EXTENSION_DIR}"
+            zip -r "${GITHUB_WORKSPACE}/artifacts/${asset_name}" .
+          )
+          echo "asset=artifacts/${asset_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          CLI_ASSET: ${{ steps.cli.outputs.asset }}
+          CHROME_ASSET: ${{ steps.chrome-extension.outputs.asset }}
+          FIREFOX_ASSET: ${{ steps.firefox.outputs.asset }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${TAG}" >/dev/null 2>&1 ||
+            git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag or release ${TAG} already exists."
+            exit 1
+          fi
+
+          gh release create "${TAG}" \
+            "${CLI_ASSET}" \
+            "${CHROME_ASSET}" \
+            "${FIREFOX_ASSET}" \
+            --target "${GITHUB_SHA}" \
+            --title "${TAG}" \
+            --notes "Release ${TAG}"

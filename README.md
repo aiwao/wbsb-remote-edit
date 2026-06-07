@@ -29,6 +29,21 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
 nix develop --command go run ./cmd/wbsb-remote-edit send ./draft.md --title "Draft"
 ```
 
+## Build with Nix
+
+```sh
+mkdir -p build
+nix build .# -o build/release
+nix build .#wbsb-remote-edit -o build/cli
+nix build .#wbsb-remote-edit-extension -o build/extension
+```
+
+The default build includes the CLI at `build/release/bin/wbsb-remote-edit` and the browser extension at `build/release/extension`. The project version is defined once in `flake.nix`.
+
+## Release Workflow
+
+The manual GitHub Actions release workflow reads the version from `nix run .#version`, refuses to continue if `v<version>` already exists, builds with Nix, packages the CLI plus Chrome ZIP and Firefox signed XPI extensions, then creates the GitHub Release using a GitHub App token. It expects these repository secrets: `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, `FIREFOX_API_KEY`, and `FIREFOX_API_SECRET`. The GitHub App must be installed on the repository with contents write access, and the Firefox secrets are the addons.mozilla.org API key / JWT issuer and API secret / JWT secret used by `web-ext sign`.
+
 Defaults:
 
 - WebSocket endpoint: `ws://127.0.0.1:8787/ws`
