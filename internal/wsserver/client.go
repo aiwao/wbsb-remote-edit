@@ -25,7 +25,7 @@ func (s *Server) serveClient(client *client) {
 	go client.writeLoop()
 
 	client.send <- Message{
-		Type: "connected",
+		Type: MessageTypeConnected,
 		From: "cli",
 		At:   now(),
 	}
@@ -58,36 +58,36 @@ func (s *Server) readLoop(client *client) {
 
 func (s *Server) reply(client *client, message Message) (Message, bool) {
 	switch strings.ToLower(strings.TrimSpace(message.Type)) {
-	case "edit":
+	case MessageTypeEdit:
 		s.BroadcastEdit(message.Title, message.Body)
 		return Message{
-			Type: "ok",
+			Type: MessageTypeOK,
 			From: "cli",
 			At:   now(),
 		}, true
-	case "ack":
+	case MessageTypeAck:
 		s.ackDelivery(client, message.ID)
 		return Message{
-			Type: "ok",
+			Type: MessageTypeOK,
 			From: "cli",
 			At:   now(),
 		}, true
-	case "wbsb_article", "wbsb_article_title":
+	case MessageTypeWBSBArticle, MessageTypeWBSBArticleTitle:
 		s.completeArticleRequest(client, message)
 		return Message{
-			Type: "ok",
+			Type: MessageTypeOK,
 			From: "cli",
 			At:   now(),
 		}, true
-	case "ping":
+	case MessageTypePing:
 		return Message{
-			Type: "pong",
+			Type: MessageTypePong,
 			From: "cli",
 			At:   now(),
 		}, true
 	default:
 		return Message{
-			Type:  "error",
+			Type:  MessageTypeError,
 			Error: "unknown message type",
 			From:  "cli",
 			At:    now(),

@@ -1,5 +1,6 @@
 import { consumeCodeFenceSeparatorBreak, hasLaterContent } from "./editor-markdown.js";
 import { markdownTokens } from "./markdown-tokens.js";
+import { CONTENT_MESSAGE_TYPES } from "./protocol.js";
 
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
 const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
@@ -279,7 +280,7 @@ async function writeArticle(article) {
 if (!globalThis[LISTENER_INSTALLED_KEY]) {
   globalThis[LISTENER_INSTALLED_KEY] = true;
   runtimeApi()?.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "write_wbsb_article") {
+    if (message?.type !== CONTENT_MESSAGE_TYPES.writeWbsbArticle) {
       return false;
     }
 

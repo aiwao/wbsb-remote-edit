@@ -49,7 +49,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 				title:          title,
 				allowedOrigins: allowedOrigins,
 				stdout:         stdout,
-				titleSource:    "get_wbsb_article",
+				titleSource:    wsserver.MessageTypeGetWBSBArticle,
 				loadArticle: func(ctx context.Context, server *wsserver.Server, _ string) (wsserver.Article, error) {
 					return server.GetWBSBArticle(ctx)
 				},
@@ -64,7 +64,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:8787", "host:port to listen on")
 	cmd.Flags().StringVar(&path, "path", "/ws", "WebSocket endpoint path")
 	cmd.Flags().StringVar(&editor, "editor", "", "editor command to run; defaults to $EDITOR")
-	cmd.Flags().StringVar(&title, "title", "", "title to publish; defaults to get_wbsb_article response title")
+	cmd.Flags().StringVar(&title, "title", "", fmt.Sprintf("title to publish; defaults to %s response title", wsserver.MessageTypeGetWBSBArticle))
 	cmd.Flags().StringArrayVar(&allowedOrigins, "allow-origin", nil, "additional exact browser Origin values to accept")
 
 	return cmd
@@ -92,7 +92,7 @@ func newSendCmd(stdout io.Writer) *cobra.Command {
 				title:          title,
 				allowedOrigins: allowedOrigins,
 				stdout:         stdout,
-				titleSource:    "get_wbsb_article_title",
+				titleSource:    wsserver.MessageTypeGetWBSBArticleTitle,
 				loadArticle: func(ctx context.Context, server *wsserver.Server, title string) (wsserver.Article, error) {
 					if title != "" {
 						return wsserver.Article{}, nil
@@ -108,7 +108,7 @@ func newSendCmd(stdout io.Writer) *cobra.Command {
 
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:8787", "host:port to listen on")
 	cmd.Flags().StringVar(&path, "path", "/ws", "WebSocket endpoint path")
-	cmd.Flags().StringVar(&title, "title", "", "title to publish; defaults to get_wbsb_article_title response title")
+	cmd.Flags().StringVar(&title, "title", "", fmt.Sprintf("title to publish; defaults to %s response title", wsserver.MessageTypeGetWBSBArticleTitle))
 	cmd.Flags().StringArrayVar(&allowedOrigins, "allow-origin", nil, "additional exact browser Origin values to accept")
 
 	return cmd

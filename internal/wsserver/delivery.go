@@ -62,7 +62,7 @@ func (s *Server) BroadcastEditAndWait(ctx context.Context, title, body string) (
 
 func (s *Server) newEditMessage(title, body string) Message {
 	return Message{
-		Type:  "edit",
+		Type:  MessageTypeEdit,
 		ID:    s.nextEditID(),
 		Title: strings.TrimSpace(title),
 		Body:  body,

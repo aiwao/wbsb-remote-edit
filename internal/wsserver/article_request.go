@@ -67,7 +67,7 @@ func (s *Server) getWBSBArticle(ctx context.Context, newRequest func() Message) 
 
 func (s *Server) newGetWBSBArticleMessage() Message {
 	return Message{
-		Type: "get_wbsb_article",
+		Type: MessageTypeGetWBSBArticle,
 		ID:   s.nextArticleRequestID(),
 		From: "cli",
 		At:   now(),
@@ -76,7 +76,7 @@ func (s *Server) newGetWBSBArticleMessage() Message {
 
 func (s *Server) newGetWBSBArticleTitleMessage() Message {
 	return Message{
-		Type: "get_wbsb_article_title",
+		Type: MessageTypeGetWBSBArticleTitle,
 		ID:   s.nextArticleRequestID(),
 		From: "cli",
 		At:   now(),
@@ -106,7 +106,7 @@ func (s *Server) completeArticleRequest(client *client, message Message) {
 	}
 
 	body := message.Body
-	if strings.EqualFold(strings.TrimSpace(message.Type), "wbsb_article_title") {
+	if strings.EqualFold(strings.TrimSpace(message.Type), MessageTypeWBSBArticleTitle) {
 		body = ""
 	}
 

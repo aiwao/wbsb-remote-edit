@@ -4,6 +4,7 @@ import {
   readWbsbArticleFromPage,
   readWbsbArticleTitleFromPage,
 } from "./page-raw-markdown.js";
+import { CONTENT_MESSAGE_TYPES, WS_MESSAGE_TYPES } from "./protocol.js";
 
 const RETRY_DELAY_MS = 1500;
 const DEFAULT_ENDPOINT = "ws://127.0.0.1:8787/ws";
@@ -40,13 +41,13 @@ function appendLog(source, text) {
 }
 
 function messageText(message) {
-  if (message.type === "get_wbsb_article") {
-    return "get_wbsb_article";
+  if (message.type === WS_MESSAGE_TYPES.getWbsbArticle) {
+    return WS_MESSAGE_TYPES.getWbsbArticle;
   }
-  if (message.type === "get_wbsb_article_title") {
-    return "get_wbsb_article_title";
+  if (message.type === WS_MESSAGE_TYPES.getWbsbArticleTitle) {
+    return WS_MESSAGE_TYPES.getWbsbArticleTitle;
   }
-  if (message.type === "edit") {
+  if (message.type === WS_MESSAGE_TYPES.edit) {
     return message.title || "untitled edit";
   }
   if (message.error) {
@@ -64,19 +65,19 @@ function handleMessage(event) {
     return;
   }
 
-  if (message.type === "get_wbsb_article") {
+  if (message.type === WS_MESSAGE_TYPES.getWbsbArticle) {
     sendWBSBArticle(message).catch((error) => {
       appendLog("extension", toErrorMessage(error));
     });
   }
 
-  if (message.type === "get_wbsb_article_title") {
+  if (message.type === WS_MESSAGE_TYPES.getWbsbArticleTitle) {
     sendWBSBArticleTitle(message).catch((error) => {
       appendLog("extension", toErrorMessage(error));
     });
   }
 
-  if (message.type === "edit") {
+  if (message.type === WS_MESSAGE_TYPES.edit) {
     editTitle.value = message.title || "Untitled";
     editContent.value = message.body || "";
     writeWBSBArticle(message)
@@ -96,7 +97,7 @@ function sendAck(message) {
     return;
   }
 
-  socket.send(JSON.stringify({ type: "ack", id: message.id }));
+  socket.send(JSON.stringify({ type: WS_MESSAGE_TYPES.ack, id: message.id }));
 }
 
 async function sendWBSBArticle(message) {
@@ -112,7 +113,7 @@ async function sendWBSBArticle(message) {
     appendLog("extension", errorText);
     socket.send(
       JSON.stringify({
-        type: "wbsb_article",
+        type: WS_MESSAGE_TYPES.wbsbArticle,
         id: message.id,
         error: errorText,
         from: "extension",
@@ -123,7 +124,7 @@ async function sendWBSBArticle(message) {
 
   socket.send(
     JSON.stringify({
-      type: "wbsb_article",
+      type: WS_MESSAGE_TYPES.wbsbArticle,
       id: message.id,
       title: article.title,
       body: article.body,
@@ -146,7 +147,7 @@ async function sendWBSBArticleTitle(message) {
     appendLog("extension", errorText);
     socket.send(
       JSON.stringify({
-        type: "wbsb_article_title",
+        type: WS_MESSAGE_TYPES.wbsbArticleTitle,
         id: message.id,
         error: errorText,
         from: "extension",
@@ -157,7 +158,7 @@ async function sendWBSBArticleTitle(message) {
 
   socket.send(
     JSON.stringify({
-      type: "wbsb_article_title",
+      type: WS_MESSAGE_TYPES.wbsbArticleTitle,
       id: message.id,
       title,
       from: "extension",
@@ -348,7 +349,7 @@ async function writeWBSBArticle(message) {
       body: message.body || "",
       title: message.title || "",
     },
-    type: "write_wbsb_article",
+    type: CONTENT_MESSAGE_TYPES.writeWbsbArticle,
   });
   if (!response?.ok) {
     throw new Error(response?.error || "could not write WBSB article");
