@@ -1,15 +1,3 @@
-export function readWbsbArticleTitleFromPage() {
-  const titleXPath = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
-  const titleElement = document.evaluate(
-    titleXPath,
-    document,
-    null,
-    XPathResult.FIRST_ORDERED_NODE_TYPE,
-    null,
-  ).singleNodeValue;
-  return titleElement ? titleElement.value.trim() : "";
-}
-
 export function readWbsbArticleFromPage() {
   const MAX_NODES = 3000;
   const MAX_OBJECTS = 5000;
@@ -24,6 +12,7 @@ export function readWbsbArticleFromPage() {
       XPathResult.FIRST_ORDERED_NODE_TYPE,
       null,
     ).singleNodeValue;
+
     return titleElement ? titleElement.value.trim() : "";
   }
 
@@ -135,17 +124,18 @@ export function readWbsbArticleFromPage() {
     editorElement?.pmViewDesc,
   ];
   const body = findMarkdownFromObjectGraph(seeds);
+  const title = readTitle();
 
   if (body === null) {
     return {
       ok: false,
-      title: readTitle(),
+      title,
     };
   }
 
   return {
     body,
     ok: true,
-    title: readTitle(),
+    title,
   };
 }

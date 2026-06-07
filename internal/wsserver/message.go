@@ -2,6 +2,20 @@ package wsserver
 
 import "time"
 
+const (
+	MessageTypeAck                 = "ack"
+	MessageTypeConnected           = "connected"
+	MessageTypeEdit                = "edit"
+	MessageTypeError               = "error"
+	MessageTypeGetWBSBArticle      = "get_wbsb_article"
+	MessageTypeGetWBSBArticleTitle = "get_wbsb_article_title"
+	MessageTypeOK                  = "ok"
+	MessageTypePing                = "ping"
+	MessageTypePong                = "pong"
+	MessageTypeWBSBArticle         = "wbsb_article"
+	MessageTypeWBSBArticleTitle    = "wbsb_article_title"
+)
+
 type Message struct {
 	Type  string `json:"type"`
 	ID    string `json:"id,omitempty"`

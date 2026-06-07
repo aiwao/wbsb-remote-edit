@@ -18,13 +18,13 @@ func TestWebSocketEdit(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	readUntil(t, conn, "connected")
+	readUntil(t, conn, MessageTypeConnected)
 
-	if err := conn.WriteJSON(Message{Type: "edit", Title: "Draft", Body: "Hello from editor"}); err != nil {
+	if err := conn.WriteJSON(Message{Type: MessageTypeEdit, Title: "Draft", Body: "Hello from editor"}); err != nil {
 		t.Fatalf("write edit message: %v", err)
 	}
 
-	got := readUntil(t, conn, "edit")
+	got := readUntil(t, conn, MessageTypeEdit)
 	if got.Title != "Draft" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Draft")
 	}
@@ -41,10 +41,10 @@ func TestBroadcastEdit(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	readUntil(t, conn, "connected")
+	readUntil(t, conn, MessageTypeConnected)
 	server.BroadcastEdit("Release notes", "Ship it")
 
-	got := readUntil(t, conn, "edit")
+	got := readUntil(t, conn, MessageTypeEdit)
 	if got.Title != "Release notes" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Release notes")
 	}
@@ -69,7 +69,7 @@ func TestLatestEditSentOnConnect(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	got := readUntil(t, conn, "edit")
+	got := readUntil(t, conn, MessageTypeEdit)
 	if got.Title != "Existing draft" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Existing draft")
 	}
@@ -86,7 +86,7 @@ func TestBroadcastEditAndWait(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	readUntil(t, conn, "connected")
+	readUntil(t, conn, MessageTypeConnected)
 
 	resultCh := make(chan deliveryTestResult, 1)
 	go func() {
@@ -94,11 +94,11 @@ func TestBroadcastEditAndWait(t *testing.T) {
 		resultCh <- deliveryTestResult{result: result, err: err}
 	}()
 
-	got := readUntil(t, conn, "edit")
+	got := readUntil(t, conn, MessageTypeEdit)
 	if got.ID == "" {
 		t.Fatal("ID is blank")
 	}
-	if err := conn.WriteJSON(Message{Type: "ack", ID: got.ID}); err != nil {
+	if err := conn.WriteJSON(Message{Type: MessageTypeAck, ID: got.ID}); err != nil {
 		t.Fatalf("write ack message: %v", err)
 	}
 
@@ -127,11 +127,11 @@ func TestBroadcastEditAndWaitForLateConnect(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	got := readUntil(t, conn, "edit")
+	got := readUntil(t, conn, MessageTypeEdit)
 	if got.Title != "Late draft" {
 		t.Fatalf("Title = %q, want %q", got.Title, "Late draft")
 	}
-	if err := conn.WriteJSON(Message{Type: "ack", ID: got.ID}); err != nil {
+	if err := conn.WriteJSON(Message{Type: MessageTypeAck, ID: got.ID}); err != nil {
 		t.Fatalf("write ack message: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestBroadcastEditAndWaitDetectsDisconnectBeforeAck(t *testing.T) {
 	defer testServer.Close()
 
 	conn := dial(t, testServer.URL)
-	readUntil(t, conn, "connected")
+	readUntil(t, conn, MessageTypeConnected)
 
 	resultCh := make(chan deliveryTestResult, 1)
 	go func() {
@@ -158,7 +158,7 @@ func TestBroadcastEditAndWaitDetectsDisconnectBeforeAck(t *testing.T) {
 		resultCh <- deliveryTestResult{result: result, err: err}
 	}()
 
-	readUntil(t, conn, "edit")
+	readUntil(t, conn, MessageTypeEdit)
 	if err := conn.Close(); err != nil {
 		t.Fatalf("close websocket: %v", err)
 	}
@@ -183,14 +183,14 @@ func TestGetWBSBArticleWaitsForClientResponse(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	readUntil(t, conn, "connected")
-	request := readUntil(t, conn, "get_wbsb_article")
+	readUntil(t, conn, MessageTypeConnected)
+	request := readUntil(t, conn, MessageTypeGetWBSBArticle)
 	if request.ID == "" {
 		t.Fatal("ID is blank")
 	}
 
 	if err := conn.WriteJSON(Message{
-		Type:  "wbsb_article",
+		Type:  MessageTypeWBSBArticle,
 		ID:    request.ID,
 		Title: "ABCDEFG",
 		Body:  "abcdefghijklmnopqrstuvwxyz\n\n\nabcdefghijklmnopqrstuvwxyz",
@@ -224,14 +224,14 @@ func TestGetWBSBArticleTitleWaitsForClientResponse(t *testing.T) {
 	conn := dial(t, testServer.URL)
 	defer conn.Close()
 
-	readUntil(t, conn, "connected")
-	request := readUntil(t, conn, "get_wbsb_article_title")
+	readUntil(t, conn, MessageTypeConnected)
+	request := readUntil(t, conn, MessageTypeGetWBSBArticleTitle)
 	if request.ID == "" {
 		t.Fatal("ID is blank")
 	}
 
 	if err := conn.WriteJSON(Message{
-		Type:  "wbsb_article_title",
+		Type:  MessageTypeWBSBArticleTitle,
 		ID:    request.ID,
 		Title: "ABCDEFG",
 		Body:  "ignored body",
@@ -264,8 +264,8 @@ func TestGetWBSBArticleDetectsDisconnectBeforeResponse(t *testing.T) {
 
 	conn := dial(t, testServer.URL)
 
-	readUntil(t, conn, "connected")
-	readUntil(t, conn, "get_wbsb_article")
+	readUntil(t, conn, MessageTypeConnected)
+	readUntil(t, conn, MessageTypeGetWBSBArticle)
 	if err := conn.Close(); err != nil {
 		t.Fatalf("close websocket: %v", err)
 	}

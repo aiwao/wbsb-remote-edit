@@ -4,11 +4,6 @@ import { markdownTokens } from "./markdown-tokens.js";
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
 const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
 const BODY_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[5]/div/div";
-const LISTENER_INSTALLED_KEY = "__remoteEditBridgeContentListenerInstalled";
-
-function runtimeApi() {
-  return globalThis.browser?.runtime || globalThis.chrome?.runtime;
-}
 
 function isArticlePage() {
   return (
@@ -267,32 +262,11 @@ async function setBody(body) {
   await replaceEditorContentsWithText(editor, body);
 }
 
-async function writeArticle(article) {
+export async function writeArticle(article) {
   if (!isArticlePage()) {
     throw new Error(`this extension only writes ${ARTICLE_MATCH}`);
   }
 
   setTitle(article?.title || "");
   await setBody(article?.body || "");
-}
-
-if (!globalThis[LISTENER_INSTALLED_KEY]) {
-  globalThis[LISTENER_INSTALLED_KEY] = true;
-  runtimeApi()?.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "write_wbsb_article") {
-      return false;
-    }
-
-    writeArticle(message.article)
-      .then(() => {
-        sendResponse({ ok: true });
-      })
-      .catch((error) => {
-        sendResponse({
-          error: error instanceof Error ? error.message : String(error),
-          ok: false,
-        });
-      });
-    return true;
-  });
 }

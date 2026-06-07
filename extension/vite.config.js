@@ -15,7 +15,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        content: "src/content.js",
+        content: "src/content/index.js",
         index: "index.html",
       },
       output: {
@@ -29,7 +29,7 @@ export default defineConfig({
     alias: [
       {
         find: /^vue$/,
-        replacement: fileURLToPath(new URL("./src/vue-runtime.js", import.meta.url)),
+        replacement: fileURLToPath(new URL("./src/vendor/vue-runtime.js", import.meta.url)),
       },
     ],
   },
