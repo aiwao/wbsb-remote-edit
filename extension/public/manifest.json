@@ -20,7 +20,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "remote-edit-bridge@wbsb-remote-edit.local",
+      "id": "remote-edit-bridge@140.lol",
       "data_collection_permissions": {
         "required": ["none"]
       },
