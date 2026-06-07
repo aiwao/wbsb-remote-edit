@@ -30,6 +30,10 @@ def parse_args():
         default=os.environ.get("AMO_API_BASE_URL", DEFAULT_API_BASE_URL),
         help="AMO API base URL. Defaults to production AMO or AMO_API_BASE_URL.",
     )
+    parser.add_argument(
+        "--download-to",
+        help="If the version exists, download its signed XPI to this path.",
+    )
     return parser.parse_args()
 
 
@@ -69,6 +73,13 @@ def version_detail_url(api_base_url, addon_id, version):
     return f"{base_url}/addons/addon/{addon_path}/versions/{version_path}/"
 
 
+def download_file(url, output_path):
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    with urllib.request.urlopen(url) as response:
+        with open(output_path, "wb") as output_file:
+            output_file.write(response.read())
+
+
 def main():
     args = parse_args()
     api_key = os.environ.get("WEB_EXT_API_KEY", "")
@@ -91,7 +102,19 @@ def main():
 
     try:
         with urllib.request.urlopen(request) as response:
-            print("true" if response.status == 200 else "false")
+            if response.status != 200:
+                print("false")
+                return 0
+
+            version_detail = json.load(response)
+            if args.download_to:
+                file_url = version_detail.get("file", {}).get("url")
+                if not file_url:
+                    print("AMO version exists, but response did not include file.url.", file=sys.stderr)
+                    return 1
+                download_file(file_url, args.download_to)
+
+            print("true")
             return 0
     except urllib.error.HTTPError as error:
         if error.code == 404:

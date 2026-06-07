@@ -168,9 +168,13 @@ jobs:
           asset_name="wbsb-remote-edit-firefox-${VERSION}.xpi"
           signed_dir="${RUNNER_TEMP}/web-ext-signed"
 
-          version_exists="$(nix run .#amo-version-exists -- --source-dir "${EXTENSION_DIR}")"
+          version_exists="$(
+            nix run .#amo-version-exists -- \
+              --source-dir "${EXTENSION_DIR}" \
+              --download-to "artifacts/${asset_name}"
+          )"
           if [ "${version_exists}" = "true" ]; then
-            echo "Firefox extension version ${VERSION} already exists on AMO; skipping web-ext sign."
+            echo "Firefox extension version ${VERSION} already exists on AMO; downloaded signed XPI."
             exit 0
           fi
 
