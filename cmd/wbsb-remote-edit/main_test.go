@@ -3,10 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/aiwao/wbsb-remote-edit/internal/wsserver"
+	"github.com/gorilla/websocket"
 )
 
 func TestRootCommandHasEditAndSend(t *testing.T) {
@@ -102,6 +108,70 @@ func TestReadMarkdownFile(t *testing.T) {
 	}
 }
 
+func TestRunEditWorkflowAllowsBlankTitle(t *testing.T) {
+	addr := reserveLocalAddr(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- runEditWorkflow(ctx, editWorkflowOptions{
+			addr:   addr,
+			path:   "/ws",
+			stdout: io.Discard,
+			loadArticle: func(ctx context.Context, server *wsserver.Server, _ string) (wsserver.Article, error) {
+				return server.GetWBSBArticle(ctx)
+			},
+			buildBody: func(_ context.Context, title string, article wsserver.Article) (string, error) {
+				if title != "" {
+					return "", fmt.Errorf("title = %q, want blank", title)
+				}
+				if article.Body != "seed body" {
+					return "", fmt.Errorf("body = %q, want seed body", article.Body)
+				}
+				return "edited body", nil
+			},
+		})
+	}()
+
+	conn := dialWorkflowWebSocket(t, addr)
+	defer conn.Close()
+
+	readWorkflowMessage(t, conn, wsserver.MessageTypeConnected)
+	request := readWorkflowMessage(t, conn, wsserver.MessageTypeGetWBSBArticle)
+	if request.ID == "" {
+		t.Fatal("article request ID is blank")
+	}
+
+	if err := conn.WriteJSON(wsserver.Message{
+		Type: wsserver.MessageTypeWBSBArticle,
+		ID:   request.ID,
+		Body: "seed body",
+	}); err != nil {
+		t.Fatalf("write article message: %v", err)
+	}
+
+	edit := readWorkflowMessage(t, conn, wsserver.MessageTypeEdit)
+	if edit.Title != "" {
+		t.Fatalf("edit title = %q, want blank", edit.Title)
+	}
+	if edit.Body != "edited body" {
+		t.Fatalf("edit body = %q, want edited body", edit.Body)
+	}
+	if err := conn.WriteJSON(wsserver.Message{Type: wsserver.MessageTypeAck, ID: edit.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("run edit workflow: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for edit workflow")
+	}
+}
+
 func TestCaptureEditorBodyUsesEditorCommand(t *testing.T) {
 	editor := `sh -c 'base=$(basename "$1"); case "$base" in Draft-*.md) ;; *) exit 7;; esac; test "$(cat "$1")" = "seed content" && printf "updated content" > "$1"' sh`
 
@@ -119,6 +189,58 @@ func TestCaptureEditorBodyUsesEditorCommand(t *testing.T) {
 	}
 	if got != "updated content" {
 		t.Fatalf("content = %q, want %q", got, "updated content")
+	}
+}
+
+func reserveLocalAddr(t *testing.T) string {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve local address: %v", err)
+	}
+	defer listener.Close()
+
+	return listener.Addr().String()
+}
+
+func dialWorkflowWebSocket(t *testing.T, addr string) *websocket.Conn {
+	t.Helper()
+
+	wsURL := "ws://" + addr + "/ws"
+	headers := map[string][]string{
+		"Origin": {"chrome-extension://test-extension"},
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+		if err == nil {
+			return conn
+		}
+		lastErr = err
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("dial %s: %v", wsURL, lastErr)
+	return nil
+}
+
+func readWorkflowMessage(t *testing.T, conn *websocket.Conn, messageType string) wsserver.Message {
+	t.Helper()
+
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set read deadline: %v", err)
+	}
+
+	for {
+		var got wsserver.Message
+		if err := conn.ReadJSON(&got); err != nil {
+			t.Fatalf("read websocket message: %v", err)
+		}
+		if got.Type == messageType {
+			return got
+		}
 	}
 }
 

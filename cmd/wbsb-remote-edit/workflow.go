@@ -27,7 +27,6 @@ type editWorkflowOptions struct {
 	title          string
 	allowedOrigins []string
 	stdout         io.Writer
-	titleSource    string
 	loadArticle    func(context.Context, *wsserver.Server, string) (wsserver.Article, error)
 	buildBody      func(context.Context, string, wsserver.Article) (string, error)
 }
@@ -56,12 +55,6 @@ func runEditWorkflow(parentCtx context.Context, options editWorkflowOptions) err
 	}
 	if title == "" {
 		title = strings.TrimSpace(article.Title)
-	}
-	if title == "" {
-		return stopSessionWithError(
-			session,
-			fmt.Errorf("title is blank; pass --title or return a title from %s", options.titleSource),
-		)
 	}
 
 	body, err := options.buildBody(ctx, title, article)
