@@ -1,14 +1,20 @@
-import { runtimeApi } from "../shared/extension-api.js";
-import { toErrorMessage } from "../shared/errors.js";
-import { CONTENT_MESSAGE_TYPES } from "../shared/protocol.js";
 import { writeArticle } from "./wbsb-editor-writer.js";
 
+const WRITE_WBSB_ARTICLE_MESSAGE = "write_wbsb_article";
 const LISTENER_INSTALLED_KEY = "__remoteEditBridgeContentListenerInstalled";
+
+function runtimeApi() {
+  return globalThis.browser?.runtime || globalThis.chrome?.runtime;
+}
+
+function toErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 if (!globalThis[LISTENER_INSTALLED_KEY]) {
   globalThis[LISTENER_INSTALLED_KEY] = true;
   runtimeApi()?.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== CONTENT_MESSAGE_TYPES.writeWbsbArticle) {
+    if (message?.type !== WRITE_WBSB_ARTICLE_MESSAGE) {
       return false;
     }
 
