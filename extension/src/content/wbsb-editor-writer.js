@@ -66,13 +66,14 @@ function insertEditorText(editor, text) {
   dispatchTextInput(editor, "insertText", text);
 }
 
-function createEnterKeyEvent(type) {
+function createEnterKeyEvent(type, options = {}) {
   return new KeyboardEvent(type, {
     bubbles: true,
     cancelable: true,
     code: "Enter",
     key: "Enter",
     keyCode: 13,
+    shiftKey: options.shiftKey || false,
     which: 13,
   });
 }
@@ -92,6 +93,11 @@ function insertEditorParagraph(editor) {
 
   document.execCommand("insertParagraph", false);
   dispatchTextInput(editor, "insertParagraph");
+}
+
+function exitEditorCodeBlock(editor) {
+  editor.dispatchEvent(createEnterKeyEvent("keydown", { shiftKey: true }));
+  editor.dispatchEvent(createEnterKeyEvent("keyup", { shiftKey: true }));
 }
 
 function escapeHtml(text) {
@@ -127,12 +133,12 @@ function pasteHtml(editor, html, plainText) {
   dispatchTextInput(editor, "insertFromPaste", plainText);
 }
 
-function insertCodeBlock(editor, token, shouldCreateFollowingParagraph) {
+function insertCodeBlock(editor, token) {
   const languageClass = token.language ? ` class="language-${escapeHtml(token.language)}"` : "";
-  const followingParagraph = shouldCreateFollowingParagraph ? "<p><br></p>" : "";
-  const html = `<pre><code${languageClass}>${escapeHtml(token.code)}</code></pre>${followingParagraph}`;
+  const html = `<pre><code${languageClass}>${escapeHtml(token.code)}</code></pre>`;
 
   pasteHtml(editor, html, token.code);
+  exitEditorCodeBlock(editor);
 }
 
 function insertThematicBreak(editor, token, shouldCreateFollowingParagraph) {
@@ -196,9 +202,9 @@ async function typeMarkdownIntoEditor(editor, markdown) {
     } else if (token.type === "thematicBreak") {
       insertThematicBreak(editor, token, shouldCreateFollowingParagraph);
     } else {
-      insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
+      insertCodeBlock(editor, token);
     }
-    if (shouldCreateFollowingParagraph) {
+    if (token.type === "code") {
       consumeCodeFenceSeparatorBreak(tokens, index);
     }
     await waitForEditorTick(index);

@@ -49,6 +49,8 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit
 - The popup has a single auto-connect switch. While it is on, the popup should keep trying to connect to the configured WebSocket endpoint.
 - Endpoint and auto-connect state are stored in `localStorage` for popup convenience.
 - `get_wbsb_article` is handled on `*://wbsb.dev/articles/new*`; the popup reads the article title input and the article body from wbsb's TipTap Markdown state. Do not use a DOM-to-Markdown fallback for reading the editor.
+- When writing edited Markdown back to the wbsb editor, code blocks must be exited with `Shift+Enter`; do not append a synthetic following paragraph as a fallback.
+- After inserting a fenced code block, consume the structural separator newline after the closing fence even when the code block is the final article content, so a trailing file newline is not typed as an extra blank paragraph.
 
 ### Go Checks
 
