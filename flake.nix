@@ -70,12 +70,23 @@
           ln -s ${wbsbRemoteEdit}/bin/wbsb-remote-edit $out/bin/wbsb-remote-edit
           cp -R ${wbsbRemoteEditExtension}/. $out/extension/
         '';
+        versionCommand = pkgs.writeShellApplication {
+          name = "wbsb-remote-edit-version";
+          text = ''
+            printf '%s' '${version}'
+          '';
+        };
       in
       {
         packages = {
           wbsb-remote-edit = wbsbRemoteEdit;
           wbsb-remote-edit-extension = wbsbRemoteEditExtension;
           default = wbsbRemoteEditBuild;
+        };
+
+        apps.version = {
+          type = "app";
+          program = "${versionCommand}/bin/wbsb-remote-edit-version";
         };
 
         devShells.default = pkgs.mkShell {
