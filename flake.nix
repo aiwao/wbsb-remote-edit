@@ -35,6 +35,7 @@
           strictDeps = true;
 
           nativeBuildInputs = [
+            pkgs.cacert
             pkgs.nodejs_latest
             pnpm
             pkgs.pnpmConfigHook
@@ -51,6 +52,8 @@
           };
 
           env.WBSB_REMOTE_EDIT_VERSION = version;
+          env.SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          env.NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 
           buildPhase = ''
             runHook preBuild
