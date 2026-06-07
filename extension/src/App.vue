@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { readWbsbArticleFromPage } from "./page-raw-markdown.js";
 
 const RETRY_DELAY_MS = 1500;
 const DEFAULT_ENDPOINT = "ws://127.0.0.1:8787/ws";
@@ -172,18 +173,11 @@ function sendTabMessage(tabId, message) {
   });
 }
 
-function executeContentScript(tabId) {
+function executeScript(details) {
   const api = extensionApi();
   if (!api?.scripting?.executeScript) {
-    return Promise.reject(
-      new Error("content script is not running and scripting API is unavailable"),
-    );
+    return Promise.reject(new Error("scripting API is unavailable"));
   }
-
-  const details = {
-    files: ["assets/content.js"],
-    target: { tabId },
-  };
 
   if (globalThis.browser?.scripting?.executeScript) {
     return api.scripting.executeScript(details);
@@ -199,6 +193,49 @@ function executeContentScript(tabId) {
       resolve(results);
     });
   });
+}
+
+function executeContentScript(tabId) {
+  return executeScript({
+    files: ["assets/content.js"],
+    target: { tabId },
+  }).catch((error) => {
+    throw new Error(
+      `content script is not running and could not be injected: ${toErrorMessage(error)}`,
+    );
+  });
+}
+
+async function executePageScript(tabId, func) {
+  try {
+    return await executeScript({
+      func,
+      target: { tabId },
+      world: "MAIN",
+    });
+  } catch {
+    return executeScript({
+      func,
+      target: { tabId },
+    });
+  }
+}
+
+async function readRawWBSBArticle(tabId) {
+  try {
+    const [result] = await executePageScript(tabId, readWbsbArticleFromPage);
+    const article = result?.result;
+    if (article?.ok && typeof article.body === "string") {
+      return {
+        body: article.body,
+        title: article.title || "",
+      };
+    }
+  } catch {
+    // Fall back to the content script's DOM-to-Markdown conversion.
+  }
+
+  return null;
 }
 
 function isMissingContentScriptError(error) {
@@ -227,6 +264,11 @@ async function readWBSBArticle() {
   const tab = await queryActiveTab();
   if (!tab?.id) {
     throw new Error("active tab is unavailable");
+  }
+
+  const rawArticle = await readRawWBSBArticle(tab.id);
+  if (rawArticle) {
+    return rawArticle;
   }
 
   const response = await sendContentMessage(tab.id, { type: "read_wbsb_article" });
