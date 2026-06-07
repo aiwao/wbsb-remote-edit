@@ -231,8 +231,8 @@ async function readRawWBSBArticle(tabId) {
         title: article.title || "",
       };
     }
-  } catch {
-    // Fall back to the content script's DOM-to-Markdown conversion.
+  } catch (error) {
+    throw new Error(`could not read raw WBSB markdown: ${toErrorMessage(error)}`);
   }
 
   return null;
@@ -271,12 +271,7 @@ async function readWBSBArticle() {
     return rawArticle;
   }
 
-  const response = await sendContentMessage(tab.id, { type: "read_wbsb_article" });
-  if (!response?.ok) {
-    throw new Error(response?.error || "could not read WBSB article");
-  }
-
-  return response.article;
+  throw new Error("could not find WBSB raw markdown editor state");
 }
 
 async function writeWBSBArticle(message) {

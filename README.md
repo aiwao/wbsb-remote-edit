@@ -14,7 +14,7 @@ Before opening the editor, the CLI requests the current article from the extensi
 { "type": "get_wbsb_article", "from": "cli" }
 ```
 
-The Vue extension reads `get_wbsb_article` only from `*://wbsb.dev/articles/new`. It takes the title from the article title input and converts the article body HTML children to Markdown with Turndown.
+The Vue extension reads `get_wbsb_article` only from `*://wbsb.dev/articles/new`. It takes the title from the article title input and reads the article body from wbsb's TipTap Markdown state.
 
 ## Run the CLI
 

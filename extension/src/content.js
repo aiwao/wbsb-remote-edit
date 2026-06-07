@@ -1,4 +1,3 @@
-import { articleBodyChildrenToMarkdown } from "./article-markdown.js";
 import { consumeCodeFenceSeparatorBreak, hasLaterContent } from "./editor-markdown.js";
 import { markdownTokens } from "./markdown-tokens.js";
 
@@ -32,33 +31,6 @@ function nodeDescription(node) {
     return node.nodeName;
   }
   return `<${node.localName}>`;
-}
-
-function readTitle() {
-  const titleElement = firstXPathNode(TITLE_XPATH);
-  if (
-    !titleElement ||
-    titleElement.nodeType !== Node.ELEMENT_NODE ||
-    titleElement.localName !== "input" ||
-    !("value" in titleElement)
-  ) {
-    throw new Error(
-      `title input was not found at ${TITLE_XPATH}; got ${nodeDescription(titleElement)}`,
-    );
-  }
-
-  return titleElement.value.trim();
-}
-
-function readBody() {
-  const bodyElement = firstXPathNode(BODY_XPATH);
-  if (!bodyElement || bodyElement.nodeType !== Node.ELEMENT_NODE) {
-    throw new Error(
-      `body element was not found at ${BODY_XPATH}; got ${nodeDescription(bodyElement)}`,
-    );
-  }
-
-  return articleBodyChildrenToMarkdown(bodyElement.children);
 }
 
 function createInputEvent(type, inputType, data = null) {
@@ -295,17 +267,6 @@ async function setBody(body) {
   await replaceEditorContentsWithText(editor, body);
 }
 
-function readArticle() {
-  if (!isArticlePage()) {
-    throw new Error(`this extension only reads ${ARTICLE_MATCH}`);
-  }
-
-  return {
-    body: readBody(),
-    title: readTitle(),
-  };
-}
-
 async function writeArticle(article) {
   if (!isArticlePage()) {
     throw new Error(`this extension only writes ${ARTICLE_MATCH}`);
@@ -318,36 +279,20 @@ async function writeArticle(article) {
 if (!globalThis[LISTENER_INSTALLED_KEY]) {
   globalThis[LISTENER_INSTALLED_KEY] = true;
   runtimeApi()?.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "read_wbsb_article" && message?.type !== "write_wbsb_article") {
+    if (message?.type !== "write_wbsb_article") {
       return false;
     }
 
-    try {
-      if (message.type === "write_wbsb_article") {
-        writeArticle(message.article)
-          .then(() => {
-            sendResponse({ ok: true });
-          })
-          .catch((error) => {
-            sendResponse({
-              error: error instanceof Error ? error.message : String(error),
-              ok: false,
-            });
-          });
-        return true;
-      }
-
-      sendResponse({
-        article: readArticle(),
-        ok: true,
+    writeArticle(message.article)
+      .then(() => {
+        sendResponse({ ok: true });
+      })
+      .catch((error) => {
+        sendResponse({
+          error: error instanceof Error ? error.message : String(error),
+          ok: false,
+        });
       });
-    } catch (error) {
-      sendResponse({
-        error: error instanceof Error ? error.message : String(error),
-        ok: false,
-      });
-    }
-
-    return false;
+    return true;
   });
 }

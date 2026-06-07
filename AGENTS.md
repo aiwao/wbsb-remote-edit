@@ -48,7 +48,7 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit
 
 - The popup has a single auto-connect switch. While it is on, the popup should keep trying to connect to the configured WebSocket endpoint.
 - Endpoint and auto-connect state are stored in `localStorage` for popup convenience.
-- `get_wbsb_article` is handled on `*://wbsb.dev/articles/new*`; the content script reads the article title input and converts the article body HTML children to Markdown.
+- `get_wbsb_article` is handled on `*://wbsb.dev/articles/new*`; the popup reads the article title input and the article body from wbsb's TipTap Markdown state. Do not use a DOM-to-Markdown fallback for reading the editor.
 
 ### Go Checks
 
