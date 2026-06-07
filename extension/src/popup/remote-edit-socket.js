@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { toErrorMessage } from "./errors.js";
+import { toErrorMessage } from "../shared/errors.js";
 
 const RETRY_DELAY_MS = 1500;
 const DEFAULT_ENDPOINT = "ws://127.0.0.1:8787/ws";

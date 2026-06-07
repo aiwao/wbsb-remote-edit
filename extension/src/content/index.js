@@ -1,6 +1,6 @@
-import { runtimeApi } from "./extension-api.js";
-import { toErrorMessage } from "./errors.js";
-import { CONTENT_MESSAGE_TYPES } from "./protocol.js";
+import { runtimeApi } from "../shared/extension-api.js";
+import { toErrorMessage } from "../shared/errors.js";
+import { CONTENT_MESSAGE_TYPES } from "../shared/protocol.js";
 import { writeArticle } from "./wbsb-editor-writer.js";
 
 const LISTENER_INSTALLED_KEY = "__remoteEditBridgeContentListenerInstalled";

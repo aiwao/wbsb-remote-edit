@@ -1,4 +1,4 @@
-import { WS_MESSAGE_TYPES } from "./protocol.js";
+import { WS_MESSAGE_TYPES } from "../shared/protocol.js";
 
 const EXTENSION_SOURCE = "extension";
 

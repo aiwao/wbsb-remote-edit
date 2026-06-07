@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import {
-  readWbsbArticleFromPage,
-  readWbsbArticleTitleFromPage,
-} from "./page-raw-markdown.js";
+import { readWbsbArticleFromPage, readWbsbArticleTitleFromPage } from "./page-raw-markdown.js";
 
 const originalDocument = globalThis.document;
 const originalXPathResult = globalThis.XPathResult;

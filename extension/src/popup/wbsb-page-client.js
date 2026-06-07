@@ -1,7 +1,10 @@
-import { readWbsbArticleFromPage, readWbsbArticleTitleFromPage } from "./page-raw-markdown.js";
-import { executeScript, queryActiveTab, sendTabMessage } from "./extension-api.js";
-import { toErrorMessage } from "./errors.js";
-import { CONTENT_MESSAGE_TYPES } from "./protocol.js";
+import {
+  readWbsbArticleFromPage,
+  readWbsbArticleTitleFromPage,
+} from "../wbsb/page-raw-markdown.js";
+import { executeScript, queryActiveTab, sendTabMessage } from "../shared/extension-api.js";
+import { toErrorMessage } from "../shared/errors.js";
+import { CONTENT_MESSAGE_TYPES } from "../shared/protocol.js";
 
 const CONTENT_SCRIPT_FILE = "assets/content.js";
 

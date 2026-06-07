@@ -9,8 +9,8 @@ import {
   wbsbArticleTitleMessage,
 } from "./remote-edit-messages.js";
 import { useRemoteEditSocket } from "./remote-edit-socket.js";
-import { toErrorMessage } from "./errors.js";
-import { WS_MESSAGE_TYPES } from "./protocol.js";
+import { toErrorMessage } from "../shared/errors.js";
+import { WS_MESSAGE_TYPES } from "../shared/protocol.js";
 import { readWbsbArticle, readWbsbArticleTitle, writeWbsbArticle } from "./wbsb-page-client.js";
 
 const editTitle = ref("No edit yet");
