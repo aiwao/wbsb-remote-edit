@@ -20,4 +20,6 @@ pnpm run dev
 pnpm run preview
 ```
 
+`vp build` also works after dependencies are installed. In a fresh checkout, run `vp install` first, or use `pnpm run build`, which installs the locked dependencies before running `vp build`.
+
 Load the built extension from `dist/` in Chrome, or select `dist/manifest.json` in Firefox temporary add-on debugging.
