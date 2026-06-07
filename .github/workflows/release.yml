@@ -235,4 +235,4 @@ jobs:
             "${assets[@]}" \
             --target "${GITHUB_SHA}" \
             --title "${TAG}" \
-            --notes "Release ${TAG}"
+            --generate-notes
