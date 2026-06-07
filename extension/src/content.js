@@ -1,16 +1,10 @@
-import TurndownService from "turndown";
+import { consumeCodeFenceSeparatorBreak, hasLaterContent } from "./editor-markdown.js";
 import { markdownTokens } from "./markdown-tokens.js";
 
 const ARTICLE_MATCH = "*://wbsb.dev/articles/new";
 const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
 const BODY_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[5]/div/div";
 const LISTENER_INSTALLED_KEY = "__remoteEditBridgeContentListenerInstalled";
-
-const turndown = new TurndownService({
-  codeBlockStyle: "fenced",
-  headingStyle: "atx",
-});
-turndown.escape = (text) => text;
 
 function runtimeApi() {
   return globalThis.browser?.runtime || globalThis.chrome?.runtime;
@@ -37,36 +31,6 @@ function nodeDescription(node) {
     return node.nodeName;
   }
   return `<${node.localName}>`;
-}
-
-function readTitle() {
-  const titleElement = firstXPathNode(TITLE_XPATH);
-  if (
-    !titleElement ||
-    titleElement.nodeType !== Node.ELEMENT_NODE ||
-    titleElement.localName !== "input" ||
-    !("value" in titleElement)
-  ) {
-    throw new Error(
-      `title input was not found at ${TITLE_XPATH}; got ${nodeDescription(titleElement)}`,
-    );
-  }
-
-  return titleElement.value.trim();
-}
-
-function readBody() {
-  const bodyElement = firstXPathNode(BODY_XPATH);
-  if (!bodyElement || bodyElement.nodeType !== Node.ELEMENT_NODE) {
-    throw new Error(
-      `body element was not found at ${BODY_XPATH}; got ${nodeDescription(bodyElement)}`,
-    );
-  }
-
-  const html = Array.from(bodyElement.children)
-    .map((child) => child.outerHTML)
-    .join("\n");
-  return turndown.turndown(html).trim();
 }
 
 function createInputEvent(type, inputType, data = null) {
@@ -141,22 +105,6 @@ function escapeHtml(text) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function hasLaterContent(tokens, index) {
-  return tokens.slice(index + 1).some((token) => {
-    if (token.type !== "text") {
-      return true;
-    }
-    return token.text.replace(/\n/g, "").length > 0;
-  });
-}
-
-function consumeLeadingParagraphBreak(tokens, index) {
-  const nextToken = tokens[index + 1];
-  if (nextToken?.type === "text" && nextToken.text.startsWith("\n")) {
-    nextToken.text = nextToken.text.slice(1);
-  }
 }
 
 function pasteHtml(editor, html, plainText) {
@@ -256,7 +204,7 @@ async function typeMarkdownIntoEditor(editor, markdown) {
       insertCodeBlock(editor, token, shouldCreateFollowingParagraph);
     }
     if (shouldCreateFollowingParagraph) {
-      consumeLeadingParagraphBreak(tokens, index);
+      consumeCodeFenceSeparatorBreak(tokens, index);
     }
     await waitForEditorTick(index);
   }
@@ -319,17 +267,6 @@ async function setBody(body) {
   await replaceEditorContentsWithText(editor, body);
 }
 
-function readArticle() {
-  if (!isArticlePage()) {
-    throw new Error(`this extension only reads ${ARTICLE_MATCH}`);
-  }
-
-  return {
-    body: readBody(),
-    title: readTitle(),
-  };
-}
-
 async function writeArticle(article) {
   if (!isArticlePage()) {
     throw new Error(`this extension only writes ${ARTICLE_MATCH}`);
@@ -342,36 +279,20 @@ async function writeArticle(article) {
 if (!globalThis[LISTENER_INSTALLED_KEY]) {
   globalThis[LISTENER_INSTALLED_KEY] = true;
   runtimeApi()?.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== "read_wbsb_article" && message?.type !== "write_wbsb_article") {
+    if (message?.type !== "write_wbsb_article") {
       return false;
     }
 
-    try {
-      if (message.type === "write_wbsb_article") {
-        writeArticle(message.article)
-          .then(() => {
-            sendResponse({ ok: true });
-          })
-          .catch((error) => {
-            sendResponse({
-              error: error instanceof Error ? error.message : String(error),
-              ok: false,
-            });
-          });
-        return true;
-      }
-
-      sendResponse({
-        article: readArticle(),
-        ok: true,
+    writeArticle(message.article)
+      .then(() => {
+        sendResponse({ ok: true });
+      })
+      .catch((error) => {
+        sendResponse({
+          error: error instanceof Error ? error.message : String(error),
+          ok: false,
+        });
       });
-    } catch (error) {
-      sendResponse({
-        error: error instanceof Error ? error.message : String(error),
-        ok: false,
-      });
-    }
-
-    return false;
+    return true;
   });
 }

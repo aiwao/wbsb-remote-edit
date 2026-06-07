@@ -1,8 +1,8 @@
 # Remote Edit Bridge Extension
 
-Manifest V3 browser extension popup for `wbsb-remote-edit`, built with pnpm, Vite+, Vue 3, and Turndown.
+Manifest V3 browser extension popup for `wbsb-remote-edit`, built with pnpm, Vite+, and Vue 3.
 
-The bundled content script runs only on `*://wbsb.dev/articles/new`, reads the article title input, and converts the article body HTML children to Markdown.
+The popup reads the current article only on `*://wbsb.dev/articles/new`, using wbsb's TipTap Markdown state for the article body. The bundled content script writes edited Markdown back to the wbsb editor.
 
 ## Commands
 
