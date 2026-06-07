@@ -267,6 +267,9 @@ export async function writeArticle(article) {
     throw new Error(`this extension only writes ${ARTICLE_MATCH}`);
   }
 
-  setTitle(article?.title || "");
+  const title = article?.title?.trim() || "";
+  if (title !== "") {
+    setTitle(title);
+  }
   await setBody(article?.body || "");
 }

@@ -49,7 +49,6 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 				title:          title,
 				allowedOrigins: allowedOrigins,
 				stdout:         stdout,
-				titleSource:    wsserver.MessageTypeGetWBSBArticle,
 				loadArticle: func(ctx context.Context, server *wsserver.Server, _ string) (wsserver.Article, error) {
 					return server.GetWBSBArticle(ctx)
 				},
@@ -92,7 +91,6 @@ func newSendCmd(stdout io.Writer) *cobra.Command {
 				title:          title,
 				allowedOrigins: allowedOrigins,
 				stdout:         stdout,
-				titleSource:    wsserver.MessageTypeGetWBSBArticleTitle,
 				loadArticle: func(ctx context.Context, server *wsserver.Server, title string) (wsserver.Article, error) {
 					if title != "" {
 						return wsserver.Article{}, nil
