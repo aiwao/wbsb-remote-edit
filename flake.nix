@@ -79,6 +79,13 @@
             printf '%s' '${version}'
           '';
         };
+        amoVersionExistsCommand = pkgs.writeShellApplication {
+          name = "amo-version-exists";
+          runtimeInputs = [ pkgs.python3 ];
+          text = ''
+            exec python3 ${./scripts/amo-version-exists.py} "$@"
+          '';
+        };
       in
       {
         packages = {
@@ -90,6 +97,10 @@
         apps.version = {
           type = "app";
           program = "${versionCommand}/bin/wbsb-remote-edit-version";
+        };
+        apps.amo-version-exists = {
+          type = "app";
+          program = "${amoVersionExistsCommand}/bin/amo-version-exists";
         };
 
         devShells.default = pkgs.mkShell {
