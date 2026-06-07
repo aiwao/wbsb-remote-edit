@@ -1,62 +1,35 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
-  readWbsbArticleFromPage,
-  readWbsbArticleTitleFromPage,
-} from "./page-raw-markdown.js";
-import { CONTENT_MESSAGE_TYPES, WS_MESSAGE_TYPES } from "./protocol.js";
+  ackMessage,
+  messageText,
+  wbsbArticleErrorMessage,
+  wbsbArticleMessage,
+  wbsbArticleTitleErrorMessage,
+  wbsbArticleTitleMessage,
+} from "./remote-edit-messages.js";
+import { useRemoteEditSocket } from "./remote-edit-socket.js";
+import { toErrorMessage } from "./errors.js";
+import { WS_MESSAGE_TYPES } from "./protocol.js";
+import { readWbsbArticle, readWbsbArticleTitle, writeWbsbArticle } from "./wbsb-page-client.js";
 
-const RETRY_DELAY_MS = 1500;
-const DEFAULT_ENDPOINT = "ws://127.0.0.1:8787/ws";
-const STORAGE_KEYS = {
-  autoConnect: "remote-edit-auto-connect",
-  endpoint: "remote-edit-endpoint",
-};
-
-const endpoint = ref(DEFAULT_ENDPOINT);
-const autoConnect = ref(false);
-const isConnected = ref(false);
-const isConnecting = ref(false);
 const editTitle = ref("No edit yet");
 const editContent = ref("");
-const logEntries = ref([]);
 
-let socket = null;
-let connecting = null;
-let retryTimer = null;
+const {
+  appendLog,
+  autoConnect,
+  endpoint,
+  endpointDisabled,
+  handleAutoConnectChange,
+  handleEndpointInput,
+  init,
+  logEntries,
+  dispose,
+  sendMessage,
+} = useRemoteEditSocket({ onMessage: handleMessageEvent });
 
-const endpointDisabled = computed(
-  () => autoConnect.value || isConnected.value || isConnecting.value,
-);
-
-function appendLog(source, text) {
-  logEntries.value = [
-    {
-      source,
-      text,
-      at: new Date().toLocaleTimeString(),
-    },
-    ...logEntries.value,
-  ].slice(0, 30);
-}
-
-function messageText(message) {
-  if (message.type === WS_MESSAGE_TYPES.getWbsbArticle) {
-    return WS_MESSAGE_TYPES.getWbsbArticle;
-  }
-  if (message.type === WS_MESSAGE_TYPES.getWbsbArticleTitle) {
-    return WS_MESSAGE_TYPES.getWbsbArticleTitle;
-  }
-  if (message.type === WS_MESSAGE_TYPES.edit) {
-    return message.title || "untitled edit";
-  }
-  if (message.error) {
-    return message.error;
-  }
-  return message.type || "message";
-}
-
-function handleMessage(event) {
+function handleMessageEvent(event) {
   let message;
   try {
     message = JSON.parse(event.data);
@@ -66,13 +39,13 @@ function handleMessage(event) {
   }
 
   if (message.type === WS_MESSAGE_TYPES.getWbsbArticle) {
-    sendWBSBArticle(message).catch((error) => {
+    sendWbsbArticle(message).catch((error) => {
       appendLog("extension", toErrorMessage(error));
     });
   }
 
   if (message.type === WS_MESSAGE_TYPES.getWbsbArticleTitle) {
-    sendWBSBArticleTitle(message).catch((error) => {
+    sendWbsbArticleTitle(message).catch((error) => {
       appendLog("extension", toErrorMessage(error));
     });
   }
@@ -80,8 +53,12 @@ function handleMessage(event) {
   if (message.type === WS_MESSAGE_TYPES.edit) {
     editTitle.value = message.title || "Untitled";
     editContent.value = message.body || "";
-    writeWBSBArticle(message)
+    writeWbsbArticle({
+      body: message.body || "",
+      title: message.title || "",
+    })
       .then(() => {
+        appendLog("WBSB", "inserted edit");
         sendAck(message);
       })
       .catch((error) => {
@@ -93,447 +70,42 @@ function handleMessage(event) {
 }
 
 function sendAck(message) {
-  if (!message.id || !socket || socket.readyState !== WebSocket.OPEN) {
-    return;
+  const ack = ackMessage(message);
+  if (ack) {
+    sendMessage(ack);
   }
-
-  socket.send(JSON.stringify({ type: WS_MESSAGE_TYPES.ack, id: message.id }));
 }
 
-async function sendWBSBArticle(message) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  let article;
+async function sendWbsbArticle(message) {
   try {
-    article = await readWBSBArticle();
+    const article = await readWbsbArticle();
+    sendMessage(wbsbArticleMessage(message, article));
+    appendLog("WBSB", article.title || "untitled article");
   } catch (error) {
     const errorText = toErrorMessage(error);
     appendLog("extension", errorText);
-    socket.send(
-      JSON.stringify({
-        type: WS_MESSAGE_TYPES.wbsbArticle,
-        id: message.id,
-        error: errorText,
-        from: "extension",
-      }),
-    );
-    return;
+    sendMessage(wbsbArticleErrorMessage(message, errorText));
   }
-
-  socket.send(
-    JSON.stringify({
-      type: WS_MESSAGE_TYPES.wbsbArticle,
-      id: message.id,
-      title: article.title,
-      body: article.body,
-      from: "extension",
-    }),
-  );
-  appendLog("WBSB", article.title || "untitled article");
 }
 
-async function sendWBSBArticleTitle(message) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  let title;
+async function sendWbsbArticleTitle(message) {
   try {
-    title = await readWBSBArticleTitle();
+    const title = await readWbsbArticleTitle();
+    sendMessage(wbsbArticleTitleMessage(message, title));
+    appendLog("WBSB", title || "untitled article");
   } catch (error) {
     const errorText = toErrorMessage(error);
     appendLog("extension", errorText);
-    socket.send(
-      JSON.stringify({
-        type: WS_MESSAGE_TYPES.wbsbArticleTitle,
-        id: message.id,
-        error: errorText,
-        from: "extension",
-      }),
-    );
-    return;
-  }
-
-  socket.send(
-    JSON.stringify({
-      type: WS_MESSAGE_TYPES.wbsbArticleTitle,
-      id: message.id,
-      title,
-      from: "extension",
-    }),
-  );
-  appendLog("WBSB", title || "untitled article");
-}
-
-function toErrorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function extensionApi() {
-  return globalThis.browser || globalThis.chrome;
-}
-
-function queryActiveTab() {
-  const api = extensionApi();
-  if (!api?.tabs?.query) {
-    return Promise.reject(new Error("tabs API is unavailable"));
-  }
-
-  if (globalThis.browser?.tabs?.query) {
-    return api.tabs.query({ active: true, currentWindow: true }).then((tabs) => tabs[0]);
-  }
-
-  return new Promise((resolve, reject) => {
-    api.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const error = api.runtime?.lastError;
-      if (error) {
-        reject(new Error(error.message));
-        return;
-      }
-      resolve(tabs[0]);
-    });
-  });
-}
-
-function sendTabMessage(tabId, message) {
-  const api = extensionApi();
-  if (!api?.tabs?.sendMessage) {
-    return Promise.reject(new Error("tabs messaging API is unavailable"));
-  }
-
-  if (globalThis.browser?.tabs?.sendMessage) {
-    return api.tabs.sendMessage(tabId, message);
-  }
-
-  return new Promise((resolve, reject) => {
-    api.tabs.sendMessage(tabId, message, (response) => {
-      const error = api.runtime?.lastError;
-      if (error) {
-        reject(new Error(error.message));
-        return;
-      }
-      resolve(response);
-    });
-  });
-}
-
-function executeScript(details) {
-  const api = extensionApi();
-  if (!api?.scripting?.executeScript) {
-    return Promise.reject(new Error("scripting API is unavailable"));
-  }
-
-  if (globalThis.browser?.scripting?.executeScript) {
-    return api.scripting.executeScript(details);
-  }
-
-  return new Promise((resolve, reject) => {
-    api.scripting.executeScript(details, (results) => {
-      const error = api.runtime?.lastError;
-      if (error) {
-        reject(new Error(error.message));
-        return;
-      }
-      resolve(results);
-    });
-  });
-}
-
-function executeContentScript(tabId) {
-  return executeScript({
-    files: ["assets/content.js"],
-    target: { tabId },
-  }).catch((error) => {
-    throw new Error(
-      `content script is not running and could not be injected: ${toErrorMessage(error)}`,
-    );
-  });
-}
-
-async function executePageScript(tabId, func) {
-  try {
-    return await executeScript({
-      func,
-      target: { tabId },
-      world: "MAIN",
-    });
-  } catch {
-    return executeScript({
-      func,
-      target: { tabId },
-    });
-  }
-}
-
-async function readRawWBSBArticle(tabId) {
-  try {
-    const [result] = await executePageScript(tabId, readWbsbArticleFromPage);
-    const article = result?.result;
-    if (article?.ok && typeof article.body === "string") {
-      return {
-        body: article.body,
-        title: article.title || "",
-      };
-    }
-  } catch (error) {
-    throw new Error(`could not read raw WBSB markdown: ${toErrorMessage(error)}`);
-  }
-
-  return null;
-}
-
-async function readRawWBSBArticleTitle(tabId) {
-  try {
-    const [result] = await executePageScript(tabId, readWbsbArticleTitleFromPage);
-    return result?.result || "";
-  } catch (error) {
-    throw new Error(`could not read WBSB article title: ${toErrorMessage(error)}`);
-  }
-}
-
-function isMissingContentScriptError(error) {
-  const message = toErrorMessage(error).toLowerCase();
-  return (
-    message.includes("could not establish connection") ||
-    message.includes("receiving end does not exist") ||
-    message.includes("no matching message handler")
-  );
-}
-
-async function sendContentMessage(tabId, message) {
-  try {
-    return await sendTabMessage(tabId, message);
-  } catch (error) {
-    if (!isMissingContentScriptError(error)) {
-      throw error;
-    }
-
-    await executeContentScript(tabId);
-    return sendTabMessage(tabId, message);
-  }
-}
-
-async function readWBSBArticle() {
-  const tab = await queryActiveTab();
-  if (!tab?.id) {
-    throw new Error("active tab is unavailable");
-  }
-
-  const rawArticle = await readRawWBSBArticle(tab.id);
-  if (rawArticle) {
-    return rawArticle;
-  }
-
-  throw new Error("could not find WBSB raw markdown editor state");
-}
-
-async function readWBSBArticleTitle() {
-  const tab = await queryActiveTab();
-  if (!tab?.id) {
-    throw new Error("active tab is unavailable");
-  }
-
-  return readRawWBSBArticleTitle(tab.id);
-}
-
-async function writeWBSBArticle(message) {
-  const tab = await queryActiveTab();
-  if (!tab?.id) {
-    throw new Error("active tab is unavailable");
-  }
-
-  const response = await sendContentMessage(tab.id, {
-    article: {
-      body: message.body || "",
-      title: message.title || "",
-    },
-    type: CONTENT_MESSAGE_TYPES.writeWbsbArticle,
-  });
-  if (!response?.ok) {
-    throw new Error(response?.error || "could not write WBSB article");
-  }
-
-  appendLog("WBSB", "inserted edit");
-}
-
-function connect() {
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    return Promise.resolve(socket);
-  }
-  if (connecting) {
-    return connecting;
-  }
-
-  isConnecting.value = true;
-
-  let nextSocket;
-  try {
-    nextSocket = new WebSocket(endpoint.value.trim());
-  } catch (error) {
-    socket = null;
-    isConnected.value = false;
-    isConnecting.value = false;
-    appendLog("extension", toErrorMessage(error));
-    return Promise.reject(error);
-  }
-
-  socket = nextSocket;
-  isConnected.value = false;
-
-  const connectPromise = new Promise((resolve, reject) => {
-    let settled = false;
-
-    nextSocket.addEventListener("open", () => {
-      if (socket !== nextSocket) {
-        return;
-      }
-
-      settled = true;
-      connecting = null;
-      isConnected.value = true;
-      isConnecting.value = false;
-      clearRetry();
-      appendLog("extension", "connected");
-      resolve(nextSocket);
-    });
-
-    nextSocket.addEventListener("message", handleMessage);
-
-    nextSocket.addEventListener("close", () => {
-      if (socket === nextSocket) {
-        socket = null;
-      }
-      if (connecting === connectPromise) {
-        connecting = null;
-      }
-
-      isConnected.value = false;
-      isConnecting.value = false;
-
-      if (autoConnect.value) {
-        appendLog("extension", "disconnected; retrying");
-        scheduleReconnect();
-      } else {
-        appendLog("extension", "disconnected");
-      }
-
-      if (!settled) {
-        reject(new Error("WebSocket connection closed"));
-      }
-    });
-
-    nextSocket.addEventListener("error", () => {
-      appendLog("extension", "connection error");
-      isConnecting.value = Boolean(connecting);
-    });
-  });
-
-  connecting = connectPromise;
-  return connecting;
-}
-
-function disconnect() {
-  clearRetry();
-  if (socket) {
-    socket.close();
-  }
-  socket = null;
-  connecting = null;
-  isConnected.value = false;
-  isConnecting.value = false;
-}
-
-function scheduleReconnect() {
-  const connected = socket && socket.readyState === WebSocket.OPEN;
-  if (!autoConnect.value || retryTimer || connecting || connected) {
-    return;
-  }
-
-  retryTimer = window.setTimeout(() => {
-    retryTimer = null;
-    if (!autoConnect.value) {
-      return;
-    }
-
-    connect().catch(() => {
-      scheduleReconnect();
-    });
-  }, RETRY_DELAY_MS);
-}
-
-function clearRetry() {
-  if (!retryTimer) {
-    return;
-  }
-
-  window.clearTimeout(retryTimer);
-  retryTimer = null;
-}
-
-function startAutoConnect() {
-  autoConnect.value = true;
-  saveSettings();
-  appendLog("extension", "auto connect on");
-
-  connect().catch(() => {
-    scheduleReconnect();
-  });
-}
-
-function stopAutoConnect() {
-  autoConnect.value = false;
-  saveSettings();
-  appendLog("extension", "auto connect off");
-  disconnect();
-}
-
-function saveSettings() {
-  try {
-    localStorage.setItem(STORAGE_KEYS.autoConnect, String(autoConnect.value));
-    localStorage.setItem(STORAGE_KEYS.endpoint, endpoint.value.trim());
-  } catch {
-    // Extension popup settings are best-effort convenience state.
-  }
-}
-
-function loadSettings() {
-  try {
-    const storedEndpoint = localStorage.getItem(STORAGE_KEYS.endpoint);
-    if (storedEndpoint) {
-      endpoint.value = storedEndpoint;
-    }
-    autoConnect.value = localStorage.getItem(STORAGE_KEYS.autoConnect) === "true";
-  } catch {
-    autoConnect.value = false;
-  }
-}
-
-function handleEndpointInput(event) {
-  endpoint.value = event.target.value;
-  saveSettings();
-}
-
-function handleAutoConnectChange(event) {
-  autoConnect.value = event.target.checked;
-  if (autoConnect.value) {
-    startAutoConnect();
-  } else {
-    stopAutoConnect();
+    sendMessage(wbsbArticleTitleErrorMessage(message, errorText));
   }
 }
 
 onMounted(() => {
-  loadSettings();
-  if (autoConnect.value) {
-    startAutoConnect();
-  }
+  init();
 });
 
 onBeforeUnmount(() => {
-  autoConnect.value = false;
-  disconnect();
+  dispose();
 });
 </script>
 
