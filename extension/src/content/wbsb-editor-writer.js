@@ -204,7 +204,7 @@ async function typeMarkdownIntoEditor(editor, markdown) {
     } else {
       insertCodeBlock(editor, token);
     }
-    if (shouldCreateFollowingParagraph) {
+    if (token.type === "code") {
       consumeCodeFenceSeparatorBreak(tokens, index);
     }
     await waitForEditorTick(index);
