@@ -120,8 +120,8 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           EXTENSION_DIR: ${{ steps.extension-source.outputs.dir }}
-          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
-          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
           set -euo pipefail
 
@@ -140,6 +140,8 @@ jobs:
           rm -rf "${signed_dir}"
           mkdir -p "${signed_dir}" artifacts
           nix develop --command web-ext sign \
+            --api-key ${WEB_EXT_API_KEY} \
+            --api-secret ${WEB_EXT_API_SECRET} \
             --source-dir "${EXTENSION_DIR}" \
             --artifacts-dir "${signed_dir}" \
             --channel unlisted
