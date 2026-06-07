@@ -66,23 +66,30 @@ function insertEditorText(editor, text) {
   dispatchTextInput(editor, "insertText", text);
 }
 
-function createEnterKeyEvent(type) {
+function createEnterKeyEvent(type, { shiftKey = false } = {}) {
   return new KeyboardEvent(type, {
     bubbles: true,
     cancelable: true,
     code: "Enter",
     key: "Enter",
     keyCode: 13,
+    shiftKey,
     which: 13,
   });
 }
 
-function insertEditorParagraph(editor) {
-  const keydownEvent = createEnterKeyEvent("keydown");
+function dispatchEnterKey(editor, options) {
+  const keydownEvent = createEnterKeyEvent("keydown", options);
   const wasNotCanceled = editor.dispatchEvent(keydownEvent);
-  editor.dispatchEvent(createEnterKeyEvent("keyup"));
+  editor.dispatchEvent(createEnterKeyEvent("keyup", options));
 
-  if (!wasNotCanceled || keydownEvent.defaultPrevented) {
+  return wasNotCanceled && !keydownEvent.defaultPrevented;
+}
+
+function insertEditorParagraph(editor) {
+  const shouldUseFallback = dispatchEnterKey(editor);
+
+  if (!shouldUseFallback) {
     return;
   }
 
@@ -92,6 +99,17 @@ function insertEditorParagraph(editor) {
 
   document.execCommand("insertParagraph", false);
   dispatchTextInput(editor, "insertParagraph");
+}
+
+function exitCodeBlock(editor) {
+  const shouldUseFallback = dispatchEnterKey(editor, { shiftKey: true });
+
+  if (!shouldUseFallback) {
+    return;
+  }
+
+  const followingParagraph = "<p><br></p>";
+  pasteHtml(editor, followingParagraph, "");
 }
 
 function escapeHtml(text) {
@@ -129,10 +147,12 @@ function pasteHtml(editor, html, plainText) {
 
 function insertCodeBlock(editor, token, shouldCreateFollowingParagraph) {
   const languageClass = token.language ? ` class="language-${escapeHtml(token.language)}"` : "";
-  const followingParagraph = shouldCreateFollowingParagraph ? "<p><br></p>" : "";
-  const html = `<pre><code${languageClass}>${escapeHtml(token.code)}</code></pre>${followingParagraph}`;
+  const html = `<pre><code${languageClass}>${escapeHtml(token.code)}</code></pre>`;
 
   pasteHtml(editor, html, token.code);
+  if (shouldCreateFollowingParagraph) {
+    exitCodeBlock(editor);
+  }
 }
 
 function insertThematicBreak(editor, token, shouldCreateFollowingParagraph) {
