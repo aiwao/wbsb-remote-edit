@@ -157,16 +157,26 @@ jobs:
           set -euo pipefail
 
           if [ -z "${WEB_EXT_API_KEY}" ]; then
-            echo "::error::FIREFOX_API_KEY must contain the addons.mozilla.org API key / JWT issuer."
+            echo "::error::AMO_JWT_ISSUER must contain the addons.mozilla.org JWT issuer."
             exit 1
           fi
           if [ -z "${WEB_EXT_API_SECRET}" ]; then
-            echo "::error::FIREFOX_API_SECRET must contain the addons.mozilla.org API secret / JWT secret."
+            echo "::error::AMO_JWT_SECRET must contain the addons.mozilla.org JWT secret."
             exit 1
           fi
 
           asset_name="wbsb-remote-edit-firefox-${VERSION}.xpi"
           signed_dir="${RUNNER_TEMP}/web-ext-signed"
+
+          version_exists="$(
+            nix run .#amo-version-exists -- \
+              --source-dir "${EXTENSION_DIR}" \
+              --download-to "artifacts/${asset_name}"
+          )"
+          if [ "${version_exists}" = "true" ]; then
+            echo "Firefox extension version ${VERSION} already exists on AMO; downloaded signed XPI."
+            exit 0
+          fi
 
           rm -rf "${signed_dir}"
           mkdir -p "${signed_dir}" artifacts
