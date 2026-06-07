@@ -4,16 +4,23 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
-func TestRootCommandHasEditOnly(t *testing.T) {
+func TestRootCommandHasEditAndSend(t *testing.T) {
 	cmd := newRootCmd(io.Reader(bytes.NewReader(nil)), io.Discard, io.Discard)
 
 	var hasEdit bool
+	var hasSend bool
 	for _, child := range cmd.Commands() {
 		if child.Name() == "edit" {
 			hasEdit = true
+			continue
+		}
+		if child.Name() == "send" {
+			hasSend = true
 			continue
 		}
 		if !child.Hidden {
@@ -23,6 +30,9 @@ func TestRootCommandHasEditOnly(t *testing.T) {
 
 	if !hasEdit {
 		t.Fatal("root command does not have edit")
+	}
+	if !hasSend {
+		t.Fatal("root command does not have send")
 	}
 }
 
@@ -37,6 +47,23 @@ func TestEditCommandUsesTitleFlagAndNoPositionals(t *testing.T) {
 	}
 	if err := cmd.Args(cmd, []string{"Draft"}); err == nil {
 		t.Fatal("edit command accepts positional title")
+	}
+}
+
+func TestSendCommandAcceptsMarkdownPathAndTitleFlag(t *testing.T) {
+	cmd := newSendCmd(io.Discard)
+
+	if cmd.Flags().Lookup("title") == nil {
+		t.Fatal("send command does not have title flag")
+	}
+	if err := cmd.Args(cmd, []string{"draft.md"}); err != nil {
+		t.Fatalf("send command rejects one markdown path: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{}); err == nil {
+		t.Fatal("send command accepts no markdown path")
+	}
+	if err := cmd.Args(cmd, []string{"one.md", "two.md"}); err == nil {
+		t.Fatal("send command accepts multiple markdown paths")
 	}
 }
 
@@ -57,6 +84,21 @@ func TestNormalizeEndpointPath(t *testing.T) {
 				t.Fatalf("normalizeEndpointPath(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestReadMarkdownFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "draft.md")
+	if err := os.WriteFile(path, []byte("# Draft\n\nbody\n"), 0o600); err != nil {
+		t.Fatalf("write markdown file: %v", err)
+	}
+
+	got, err := readMarkdownFile(path)
+	if err != nil {
+		t.Fatalf("read markdown file: %v", err)
+	}
+	if got != "# Draft\n\nbody\n" {
+		t.Fatalf("body = %q, want markdown file contents", got)
 	}
 }
 

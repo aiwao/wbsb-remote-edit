@@ -26,6 +26,7 @@ The Vue extension reads `get_wbsb_article` and `get_wbsb_article_title` only fro
 
 ```sh
 nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
+nix develop --command go run ./cmd/wbsb-remote-edit send ./draft.md --title "Draft"
 ```
 
 Defaults:
@@ -35,6 +36,8 @@ Defaults:
 - Local dev origins: `http://localhost`, `http://127.0.0.1`, and loopback IPs are accepted
 
 The command starts the local WebSocket server, waits for the extension to connect, requests the current article, opens `$EDITOR` with the returned body, and sends the title plus the saved editor content to the extension after the editor exits. The extension acknowledges the received edit after displaying it, then the CLI shuts down the WebSocket server. Use `--editor` to override `$EDITOR`. Use `--title` to override the article title returned by the extension.
+
+Use `send <markdown-path>` to send an existing Markdown file without opening an editor. If `--title` is omitted, `send` requests the current article title from the extension and sends that title with the file body.
 
 ## Build the Vue Extension
 
@@ -74,6 +77,7 @@ nix develop --command web-ext lint --source-dir extension/dist
 ```sh
 nix develop --command go test ./...
 nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft" --addr 127.0.0.1:8787
+nix develop --command go run ./cmd/wbsb-remote-edit send ./draft.md --title "Draft"
 nix develop --command sh -lc 'cd extension && pnpm run build'
 nix develop --command web-ext lint --source-dir extension/dist
 ```
