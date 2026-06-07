@@ -5,6 +5,7 @@ import {
 } from "./page-raw-markdown.js";
 
 const originalDocument = globalThis.document;
+const originalXPathResult = globalThis.XPathResult;
 
 function node(properties = {}) {
   return Object.assign({}, properties);
@@ -15,10 +16,12 @@ function documentWith({ nodes = [], title = "" }) {
   return {
     body: node(),
     documentElement: node(),
+    evaluate() {
+      return {
+        singleNodeValue: titleInput,
+      };
+    },
     querySelector(selector) {
-      if (selector === 'input[aria-label="タイトル"]') {
-        return titleInput;
-      }
       if (selector === ".ProseMirror") {
         return nodes.find((node) => node.className === "ProseMirror") || null;
       }
@@ -33,9 +36,11 @@ function documentWith({ nodes = [], title = "" }) {
 describe("readWbsbArticleFromPage", () => {
   afterEach(() => {
     globalThis.document = originalDocument;
+    globalThis.XPathResult = originalXPathResult;
   });
 
-  it("reads only the article title from the title input", () => {
+  it("reads only the article title from the title XPath", () => {
+    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     globalThis.document = documentWith({
       nodes: [],
       title: "Title Only",
@@ -45,6 +50,7 @@ describe("readWbsbArticleFromPage", () => {
   });
 
   it("finds raw markdown from a TipTap editor inside a React object graph", () => {
+    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     const tiptapEditor = {
       storage: {
         markdown: {
@@ -77,6 +83,7 @@ describe("readWbsbArticleFromPage", () => {
   });
 
   it("returns ok false when no TipTap markdown storage is visible", () => {
+    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     globalThis.document = documentWith({
       nodes: [node({ className: "ProseMirror" })],
       title: "Fallback",
