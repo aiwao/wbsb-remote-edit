@@ -97,22 +97,53 @@ jobs:
         run: |
           set -euo pipefail
 
-          case "$(uname -m)" in
-            x86_64) arch="x86_64" ;;
-            aarch64 | arm64) arch="arm64" ;;
-            *) arch="$(uname -m)" ;;
-          esac
+          mkdir -p artifacts
+          build_script="${RUNNER_TEMP}/build-cli-assets.sh"
+          cat > "${build_script}" <<'BASH'
+            set -euo pipefail
 
-          asset_name="wbsb-remote-edit-cli-${VERSION}-linux-${arch}.tar.gz"
-          cli_dir="${RUNNER_TEMP}/wbsb-remote-edit-cli"
+            version="$1"
+            build_root="${RUNNER_TEMP}/wbsb-remote-edit-cli"
+            targets=(
+              linux/amd64
+              linux/arm64
+              darwin/amd64
+              darwin/arm64
+              windows/amd64
+              windows/arm64
+            )
 
-          rm -rf "${cli_dir}"
-          mkdir -p "${cli_dir}" artifacts
-          cp -L build/release/bin/wbsb-remote-edit "${cli_dir}/wbsb-remote-edit"
-          chmod 0755 "${cli_dir}/wbsb-remote-edit"
-          tar -C "${cli_dir}" -czf "artifacts/${asset_name}" wbsb-remote-edit
+            rm -rf "${build_root}"
+            mkdir -p "${build_root}"
 
-          echo "asset=artifacts/${asset_name}" >> "$GITHUB_OUTPUT"
+            for target in "${targets[@]}"; do
+              IFS=/ read -r goos goarch <<< "${target}"
+              target_dir="${build_root}/${goos}-${goarch}"
+              mkdir -p "${target_dir}"
+
+              binary="wbsb-remote-edit"
+              if [ "${goos}" = "windows" ]; then
+                binary="${binary}.exe"
+              fi
+
+              CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
+                go build -trimpath -ldflags="-s -w" \
+                -o "${target_dir}/${binary}" ./cmd/wbsb-remote-edit
+
+              if [ "${goos}" = "windows" ]; then
+                asset_name="wbsb-remote-edit-cli-${version}-${goos}-${goarch}.zip"
+                (
+                  cd "${target_dir}"
+                  zip -q "${GITHUB_WORKSPACE}/artifacts/${asset_name}" "${binary}"
+                )
+              else
+                asset_name="wbsb-remote-edit-cli-${version}-${goos}-${goarch}.tar.gz"
+                tar -C "${target_dir}" -czf "${GITHUB_WORKSPACE}/artifacts/${asset_name}" "${binary}"
+              fi
+            done
+          BASH
+
+          nix develop --command bash "${build_script}" "${VERSION}"
 
       - name: Package Firefox extension
         id: firefox
@@ -140,8 +171,8 @@ jobs:
           rm -rf "${signed_dir}"
           mkdir -p "${signed_dir}" artifacts
           nix develop --command web-ext sign \
-            --api-key ${WEB_EXT_API_KEY} \
-            --api-secret ${WEB_EXT_API_SECRET} \
+            --api-key "${WEB_EXT_API_KEY}" \
+            --api-secret "${WEB_EXT_API_SECRET}" \
             --source-dir "${EXTENSION_DIR}" \
             --artifacts-dir "${signed_dir}" \
             --channel unlisted
@@ -184,9 +215,6 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.version.outputs.tag }}
-          CLI_ASSET: ${{ steps.cli.outputs.asset }}
-          CHROME_ASSET: ${{ steps.chrome-extension.outputs.asset }}
-          FIREFOX_ASSET: ${{ steps.firefox.outputs.asset }}
         run: |
           set -euo pipefail
 
@@ -196,10 +224,15 @@ jobs:
             exit 1
           fi
 
+          shopt -s nullglob
+          assets=(artifacts/*)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "::error::No release artifacts were created."
+            exit 1
+          fi
+
           gh release create "${TAG}" \
-            "${CLI_ASSET}" \
-            "${CHROME_ASSET}" \
-            "${FIREFOX_ASSET}" \
+            "${assets[@]}" \
             --target "${GITHUB_SHA}" \
             --title "${TAG}" \
             --notes "Release ${TAG}"
