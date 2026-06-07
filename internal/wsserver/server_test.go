@@ -210,6 +210,47 @@ func TestGetWBSBArticleWaitsForClientResponse(t *testing.T) {
 	}
 }
 
+func TestGetWBSBArticleTitleWaitsForClientResponse(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	defer testServer.Close()
+
+	resultCh := make(chan articleTestResult, 1)
+	go func() {
+		article, err := server.GetWBSBArticleTitle(context.Background())
+		resultCh <- articleTestResult{article: article, err: err}
+	}()
+
+	conn := dial(t, testServer.URL)
+	defer conn.Close()
+
+	readUntil(t, conn, "connected")
+	request := readUntil(t, conn, "get_wbsb_article_title")
+	if request.ID == "" {
+		t.Fatal("ID is blank")
+	}
+
+	if err := conn.WriteJSON(Message{
+		Type:  "wbsb_article_title",
+		ID:    request.ID,
+		Title: "ABCDEFG",
+		Body:  "ignored body",
+	}); err != nil {
+		t.Fatalf("write article title message: %v", err)
+	}
+
+	result := readArticleResult(t, resultCh)
+	if result.err != nil {
+		t.Fatalf("GetWBSBArticleTitle error: %v", result.err)
+	}
+	if result.article.Title != "ABCDEFG" {
+		t.Fatalf("Title = %q, want %q", result.article.Title, "ABCDEFG")
+	}
+	if result.article.Body != "" {
+		t.Fatalf("Body = %q, want blank", result.article.Body)
+	}
+}
+
 func TestGetWBSBArticleDetectsDisconnectBeforeResponse(t *testing.T) {
 	server := New(Config{})
 	testServer := httptest.NewServer(server.Handler())

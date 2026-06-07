@@ -1,6 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { readWbsbArticleFromPage } from "./page-raw-markdown.js";
+import {
+  readWbsbArticleFromPage,
+  readWbsbArticleTitleFromPage,
+} from "./page-raw-markdown.js";
 
 const RETRY_DELAY_MS = 1500;
 const DEFAULT_ENDPOINT = "ws://127.0.0.1:8787/ws";
@@ -40,6 +43,9 @@ function messageText(message) {
   if (message.type === "get_wbsb_article") {
     return "get_wbsb_article";
   }
+  if (message.type === "get_wbsb_article_title") {
+    return "get_wbsb_article_title";
+  }
   if (message.type === "edit") {
     return message.title || "untitled edit";
   }
@@ -60,6 +66,12 @@ function handleMessage(event) {
 
   if (message.type === "get_wbsb_article") {
     sendWBSBArticle(message).catch((error) => {
+      appendLog("extension", toErrorMessage(error));
+    });
+  }
+
+  if (message.type === "get_wbsb_article_title") {
+    sendWBSBArticleTitle(message).catch((error) => {
       appendLog("extension", toErrorMessage(error));
     });
   }
@@ -119,6 +131,39 @@ async function sendWBSBArticle(message) {
     }),
   );
   appendLog("WBSB", article.title || "untitled article");
+}
+
+async function sendWBSBArticleTitle(message) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  let title;
+  try {
+    title = await readWBSBArticleTitle();
+  } catch (error) {
+    const errorText = toErrorMessage(error);
+    appendLog("extension", errorText);
+    socket.send(
+      JSON.stringify({
+        type: "wbsb_article_title",
+        id: message.id,
+        error: errorText,
+        from: "extension",
+      }),
+    );
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      type: "wbsb_article_title",
+      id: message.id,
+      title,
+      from: "extension",
+    }),
+  );
+  appendLog("WBSB", title || "untitled article");
 }
 
 function toErrorMessage(error) {
@@ -238,6 +283,15 @@ async function readRawWBSBArticle(tabId) {
   return null;
 }
 
+async function readRawWBSBArticleTitle(tabId) {
+  try {
+    const [result] = await executePageScript(tabId, readWbsbArticleTitleFromPage);
+    return result?.result || "";
+  } catch (error) {
+    throw new Error(`could not read WBSB article title: ${toErrorMessage(error)}`);
+  }
+}
+
 function isMissingContentScriptError(error) {
   const message = toErrorMessage(error).toLowerCase();
   return (
@@ -272,6 +326,15 @@ async function readWBSBArticle() {
   }
 
   throw new Error("could not find WBSB raw markdown editor state");
+}
+
+async function readWBSBArticleTitle() {
+  const tab = await queryActiveTab();
+  if (!tab?.id) {
+    throw new Error("active tab is unavailable");
+  }
+
+  return readRawWBSBArticleTitle(tab.id);
 }
 
 async function writeWBSBArticle(message) {

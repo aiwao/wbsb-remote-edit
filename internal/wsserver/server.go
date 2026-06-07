@@ -194,13 +194,21 @@ func (s *Server) BroadcastEditAndWait(ctx context.Context, title, body string) (
 }
 
 func (s *Server) GetWBSBArticle(ctx context.Context) (Article, error) {
+	return s.getWBSBArticle(ctx, s.newGetWBSBArticleMessage)
+}
+
+func (s *Server) GetWBSBArticleTitle(ctx context.Context) (Article, error) {
+	return s.getWBSBArticle(ctx, s.newGetWBSBArticleTitleMessage)
+}
+
+func (s *Server) getWBSBArticle(ctx context.Context, newRequest func() Message) (Article, error) {
 	for {
 		client, err := s.waitForClient(ctx)
 		if err != nil {
 			return Article{}, err
 		}
 
-		message := s.newGetWBSBArticleMessage()
+		message := newRequest()
 		waiter := &articleWaiter{
 			id:     message.ID,
 			target: client,
@@ -304,7 +312,7 @@ func (s *Server) reply(client *client, message Message) (Message, bool) {
 			From: "cli",
 			At:   now(),
 		}, true
-	case "wbsb_article":
+	case "wbsb_article", "wbsb_article_title":
 		s.completeArticleRequest(client, message)
 		return Message{
 			Type: "ok",
@@ -330,6 +338,15 @@ func (s *Server) reply(client *client, message Message) (Message, bool) {
 func (s *Server) newGetWBSBArticleMessage() Message {
 	return Message{
 		Type: "get_wbsb_article",
+		ID:   s.nextArticleRequestID(),
+		From: "cli",
+		At:   now(),
+	}
+}
+
+func (s *Server) newGetWBSBArticleTitleMessage() Message {
+	return Message{
+		Type: "get_wbsb_article_title",
 		ID:   s.nextArticleRequestID(),
 		From: "cli",
 		At:   now(),
@@ -439,9 +456,14 @@ func (s *Server) completeArticleRequest(client *client, message Message) {
 		return
 	}
 
+	body := message.Body
+	if strings.EqualFold(strings.TrimSpace(message.Type), "wbsb_article_title") {
+		body = ""
+	}
+
 	s.completeArticleRequestLocked(waiter, Article{
 		Title: message.Title,
-		Body:  message.Body,
+		Body:  body,
 	}, nil)
 }
 

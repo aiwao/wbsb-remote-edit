@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { readWbsbArticleFromPage } from "./page-raw-markdown.js";
+import {
+  readWbsbArticleFromPage,
+  readWbsbArticleTitleFromPage,
+} from "./page-raw-markdown.js";
 
 const originalDocument = globalThis.document;
 
@@ -30,6 +33,15 @@ function documentWith({ nodes = [], title = "" }) {
 describe("readWbsbArticleFromPage", () => {
   afterEach(() => {
     globalThis.document = originalDocument;
+  });
+
+  it("reads only the article title from the title input", () => {
+    globalThis.document = documentWith({
+      nodes: [],
+      title: "Title Only",
+    });
+
+    expect(readWbsbArticleTitleFromPage()).toBe("Title Only");
   });
 
   it("finds raw markdown from a TipTap editor inside a React object graph", () => {
