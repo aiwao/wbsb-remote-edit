@@ -29,6 +29,13 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
 nix develop --command go run ./cmd/wbsb-remote-edit send ./draft.md --title "Draft"
 ```
 
+## Build the CLI
+
+```sh
+mkdir -p build
+nix build .#wbsb-remote-edit -o build/wbsb-remote-edit
+```
+
 Defaults:
 
 - WebSocket endpoint: `ws://127.0.0.1:8787/ws`
