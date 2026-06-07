@@ -42,7 +42,7 @@ The default build includes the CLI at `build/release/bin/wbsb-remote-edit` and t
 
 ## Release Workflow
 
-The manual GitHub Actions release workflow reads the version from `nix run .#version`, refuses to continue if `v<version>` already exists, builds with Nix, packages CLI binaries for Linux, macOS, and Windows on amd64 and arm64, packages Chrome ZIP and Firefox signed XPI extensions, then creates the GitHub Release using a GitHub App token. It expects these repository secrets: `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, `AMO_JWT_ISSUER`, and `AMO_JWT_SECRET`. The GitHub App must be installed on the repository with contents write access, and the AMO secrets are the addons.mozilla.org JWT issuer and JWT secret used by `web-ext sign`.
+The manual GitHub Actions release workflow reads the version from `nix run .#version`, refuses to continue if `v<version>` already exists, builds with Nix, packages CLI binaries for Linux, macOS, and Windows on amd64 and arm64, packages Chrome ZIP and Firefox signed XPI extensions, then creates the GitHub Release using a GitHub App token. It expects these repository secrets: `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, `AMO_JWT_ISSUER`, and `AMO_JWT_SECRET`. The GitHub App must be installed on the repository with contents write access, and the AMO secrets are the addons.mozilla.org JWT issuer and JWT secret used by `web-ext sign`. If the Firefox extension version already exists on AMO, signing is skipped for that run.
 
 Defaults:
 
