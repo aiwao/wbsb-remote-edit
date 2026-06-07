@@ -14,7 +14,13 @@ Before opening the editor, the CLI requests the current article from the extensi
 { "type": "get_wbsb_article", "from": "cli" }
 ```
 
-The Vue extension reads `get_wbsb_article` only from `*://wbsb.dev/articles/new`. It takes the title from the article title input and reads the article body from wbsb's TipTap Markdown state.
+The CLI can also request only the current article title:
+
+```json
+{ "type": "get_wbsb_article_title", "from": "cli" }
+```
+
+The Vue extension reads `get_wbsb_article` and `get_wbsb_article_title` only from `*://wbsb.dev/articles/new`. It takes the title from the article title input and reads the article body from wbsb's TipTap Markdown state only for `get_wbsb_article`.
 
 ## Run the CLI
 

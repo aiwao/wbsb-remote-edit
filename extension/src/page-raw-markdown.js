@@ -1,24 +1,26 @@
+export function readWbsbArticleTitleFromPage() {
+  const input = document.querySelector('input[aria-label="タイトル"]');
+  if (input && "value" in input) {
+    return input.value.trim();
+  }
+
+  const titleXPath = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
+  const titleElement = document.evaluate
+    ? document.evaluate(
+        titleXPath,
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null,
+      ).singleNodeValue
+    : null;
+  return titleElement && "value" in titleElement ? titleElement.value.trim() : "";
+}
+
 export function readWbsbArticleFromPage() {
   const MAX_NODES = 3000;
   const MAX_OBJECTS = 5000;
   const REACT_PROPERTY_PATTERN = /^__(reactFiber|reactProps|reactContainer)\$/;
-
-  function readTitle() {
-    const input = document.querySelector('input[aria-label="タイトル"]');
-    if (input && "value" in input) {
-      return input.value.trim();
-    }
-
-    const titleXPath = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
-    const titleElement = document.evaluate?.(
-      titleXPath,
-      document,
-      null,
-      XPathResult.FIRST_ORDERED_NODE_TYPE,
-      null,
-    ).singleNodeValue;
-    return titleElement && "value" in titleElement ? titleElement.value.trim() : "";
-  }
 
   function isObject(value) {
     return (typeof value === "object" && value !== null) || typeof value === "function";
@@ -132,13 +134,13 @@ export function readWbsbArticleFromPage() {
   if (body === null) {
     return {
       ok: false,
-      title: readTitle(),
+      title: readWbsbArticleTitleFromPage(),
     };
   }
 
   return {
     body,
     ok: true,
-    title: readTitle(),
+    title: readWbsbArticleTitleFromPage(),
   };
 }
