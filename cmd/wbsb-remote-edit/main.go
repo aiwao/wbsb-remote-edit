@@ -47,44 +47,34 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 		Short: "Open an editor and publish the written content",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title = strings.TrimSpace(title)
-			path = normalizeEndpointPath(path)
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			session, err := startServerSession(ctx, stdout, wsserver.Config{
-				Addr:           addr,
-				Path:           path,
-				AllowedOrigins: allowedOrigins,
-			})
-			if err != nil {
-				return err
-			}
-
-			fmt.Fprintf(stdout, "wbsb-remote-edit listening on ws://%s%s\n", addr, path)
-			fmt.Fprintln(stdout, "waiting for browser extension connection")
-
-			article, err := session.server.GetWBSBArticle(ctx)
-			if err != nil {
-				session.stop()
-				return err
-			}
-			if title == "" {
-				title = strings.TrimSpace(article.Title)
-			}
-			if title == "" {
-				session.stop()
-				return errors.New("title is blank; pass --title or return a title from get_wbsb_article")
-			}
-			fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(article.Body)))
-
-			body, err := captureEditorBody(ctx, editor, title, article.Body, stdin, stdout, stderr)
-			if err != nil {
-				session.stop()
-				return err
-			}
-
-			return sendEditAndStop(ctx, session, stdout, title, body)
+			return runEditWorkflow(
+				ctx,
+				stdout,
+				editWorkflowOptions{
+					Addr:               addr,
+					Path:               path,
+					Title:              title,
+					AllowedOrigins:     allowedOrigins,
+					MissingTitleSource: "get_wbsb_article",
+				},
+				func(ctx context.Context, server *wsserver.Server, _ string) (workflowArticle, error) {
+					article, err := server.GetWBSBArticle(ctx)
+					if err != nil {
+						return workflowArticle{}, err
+					}
+					return workflowArticle{
+						Title: article.Title,
+						Body:  article.Body,
+					}, nil
+				},
+				func(ctx context.Context, title, initialBody string) (string, error) {
+					fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(initialBody)))
+					return captureEditorBody(ctx, editor, title, initialBody, stdin, stdout, stderr)
+				},
+			)
 		},
 	}
 
@@ -108,8 +98,6 @@ func newSendCmd(stdout io.Writer) *cobra.Command {
 		Short: "Send a Markdown file to the browser extension",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title = strings.TrimSpace(title)
-			path = normalizeEndpointPath(path)
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -118,32 +106,33 @@ func newSendCmd(stdout io.Writer) *cobra.Command {
 				return err
 			}
 
-			session, err := startServerSession(ctx, stdout, wsserver.Config{
-				Addr:           addr,
-				Path:           path,
-				AllowedOrigins: allowedOrigins,
-			})
-			if err != nil {
-				return err
-			}
-
-			fmt.Fprintf(stdout, "wbsb-remote-edit listening on ws://%s%s\n", addr, path)
-			fmt.Fprintln(stdout, "waiting for browser extension connection")
-
-			if title == "" {
-				article, err := session.server.GetWBSBArticleTitle(ctx)
-				if err != nil {
-					session.stop()
-					return err
-				}
-				title = strings.TrimSpace(article.Title)
-			}
-			if title == "" {
-				session.stop()
-				return errors.New("title is blank; pass --title or return a title from get_wbsb_article_title")
-			}
-
-			return sendEditAndStop(ctx, session, stdout, title, body)
+			return runEditWorkflow(
+				ctx,
+				stdout,
+				editWorkflowOptions{
+					Addr:               addr,
+					Path:               path,
+					Title:              title,
+					AllowedOrigins:     allowedOrigins,
+					MissingTitleSource: "get_wbsb_article_title",
+				},
+				func(ctx context.Context, server *wsserver.Server, title string) (workflowArticle, error) {
+					if title != "" {
+						return workflowArticle{Body: body}, nil
+					}
+					article, err := server.GetWBSBArticleTitle(ctx)
+					if err != nil {
+						return workflowArticle{}, err
+					}
+					return workflowArticle{
+						Title: article.Title,
+						Body:  body,
+					}, nil
+				},
+				func(_ context.Context, _ string, initialBody string) (string, error) {
+					return initialBody, nil
+				},
+			)
 		},
 	}
 
@@ -164,6 +153,76 @@ func normalizeEndpointPath(path string) string {
 		return "/" + path
 	}
 	return path
+}
+
+type editWorkflowOptions struct {
+	Addr               string
+	Path               string
+	Title              string
+	AllowedOrigins     []string
+	MissingTitleSource string
+}
+
+type workflowArticle struct {
+	Title string
+	Body  string
+}
+
+type workflowArticleLoader func(context.Context, *wsserver.Server, string) (workflowArticle, error)
+type workflowBodyPreparer func(context.Context, string, string) (string, error)
+
+func runEditWorkflow(
+	ctx context.Context,
+	stdout io.Writer,
+	options editWorkflowOptions,
+	loadArticle workflowArticleLoader,
+	prepareBody workflowBodyPreparer,
+) error {
+	title := strings.TrimSpace(options.Title)
+	path := normalizeEndpointPath(options.Path)
+
+	session, err := startServerSession(ctx, stdout, wsserver.Config{
+		Addr:           options.Addr,
+		Path:           path,
+		AllowedOrigins: options.AllowedOrigins,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(stdout, "wbsb-remote-edit listening on ws://%s%s\n", options.Addr, path)
+	fmt.Fprintln(stdout, "waiting for browser extension connection")
+
+	article, err := loadArticle(ctx, session.server, title)
+	if err != nil {
+		session.stop()
+		return err
+	}
+
+	title, err = resolveWorkflowTitle(title, article.Title, options.MissingTitleSource)
+	if err != nil {
+		session.stop()
+		return err
+	}
+
+	body, err := prepareBody(ctx, title, article.Body)
+	if err != nil {
+		session.stop()
+		return err
+	}
+
+	return sendEditAndStop(ctx, session, stdout, title, body)
+}
+
+func resolveWorkflowTitle(title, fallback, fallbackSource string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = strings.TrimSpace(fallback)
+	}
+	if title == "" {
+		return "", fmt.Errorf("title is blank; pass --title or return a title from %s", fallbackSource)
+	}
+	return title, nil
 }
 
 type serverSession struct {

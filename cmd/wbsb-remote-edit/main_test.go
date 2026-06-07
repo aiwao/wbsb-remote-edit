@@ -102,6 +102,48 @@ func TestReadMarkdownFile(t *testing.T) {
 	}
 }
 
+func TestResolveWorkflowTitle(t *testing.T) {
+	tests := []struct {
+		name         string
+		title        string
+		fallback     string
+		want         string
+		wantErr      bool
+		errorMessage string
+	}{
+		{name: "uses flag title", title: " Draft ", fallback: "Article", want: "Draft"},
+		{name: "uses fallback title", title: "", fallback: " Article ", want: "Article"},
+		{
+			name:         "rejects blank title",
+			title:        " ",
+			fallback:     " ",
+			wantErr:      true,
+			errorMessage: "title is blank; pass --title or return a title from get_wbsb_article",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveWorkflowTitle(tt.title, tt.fallback, "get_wbsb_article")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if err.Error() != tt.errorMessage {
+					t.Fatalf("error = %q, want %q", err.Error(), tt.errorMessage)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolve title: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("title = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCaptureEditorBodyUsesEditorCommand(t *testing.T) {
 	editor := `sh -c 'base=$(basename "$1"); case "$base" in Draft-*.md) ;; *) exit 7;; esac; test "$(cat "$1")" = "seed content" && printf "updated content" > "$1"' sh`
 
