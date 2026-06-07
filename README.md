@@ -29,12 +29,16 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
 nix develop --command go run ./cmd/wbsb-remote-edit send ./draft.md --title "Draft"
 ```
 
-## Build the CLI
+## Build with Nix
 
 ```sh
 mkdir -p build
-nix build .#wbsb-remote-edit -o build/wbsb-remote-edit
+nix build .# -o build/release
+nix build .#wbsb-remote-edit -o build/cli
+nix build .#wbsb-remote-edit-extension -o build/extension
 ```
+
+The default build includes the CLI at `build/release/bin/wbsb-remote-edit` and the browser extension at `build/release/extension`. The project version is defined once in `flake.nix`.
 
 Defaults:
 
