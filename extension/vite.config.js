@@ -4,7 +4,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
-const projectVersion = process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromFlake();
+const projectVersion =
+  process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromFlake();
 
 function readProjectVersionFromFlake() {
   const flakePath = fileURLToPath(new URL("../flake.nix", import.meta.url));
@@ -52,7 +53,6 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        content: "src/content/index.js",
         index: "index.html",
       },
       output: {
