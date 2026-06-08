@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   readWbsbArticleFromPage,
   readWbsbArticleTitleFromPage,
+  runWbsbArticlePageAction,
   writeWbsbArticleToPage,
 } from "./page-raw-markdown.js";
 
@@ -107,6 +108,29 @@ describe("readWbsbArticleFromPage", () => {
       body: "- first\n\nnext",
       ok: true,
       title: "Raw Markdown",
+    });
+  });
+
+  it("finds raw markdown from the official TipTap Markdown editor API", () => {
+    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
+    const tiptapEditor = {
+      getMarkdown: () => "official markdown",
+    };
+    const editorNode = node({ className: "ProseMirror" });
+    Object.defineProperty(editorNode, "__reactProps$test", {
+      value: {
+        editor: tiptapEditor,
+      },
+    });
+    globalThis.document = documentWith({
+      nodes: [editorNode],
+      title: "Official Markdown",
+    });
+
+    expect(runWbsbArticlePageAction("read")).toEqual({
+      body: "official markdown",
+      ok: true,
+      title: "Official Markdown",
     });
   });
 
