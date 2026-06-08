@@ -5,8 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
-const projectVersion =
-  process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromNix();
+const projectVersion = process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromNix();
 
 function readProjectVersionFromNix() {
   const repoRoot = fileURLToPath(new URL("../", import.meta.url));

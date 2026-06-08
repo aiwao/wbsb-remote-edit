@@ -1,8 +1,4 @@
-import {
-  readWbsbArticleFromPage,
-  readWbsbArticleTitleFromPage,
-  writeWbsbArticleToPage,
-} from "../wbsb/page-raw-markdown.js";
+import { runWbsbArticlePageAction } from "../wbsb/page-raw-markdown.js";
 import { executeScript, queryActiveTab } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
 
@@ -32,7 +28,7 @@ async function executePageScript(tabId, func, args = []) {
 
 async function readRawWbsbArticle(tabId) {
   try {
-    const [result] = await executePageScript(tabId, readWbsbArticleFromPage);
+    const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["read"]);
     const article = result?.result;
     if (article?.ok && typeof article.body === "string") {
       return {
@@ -49,7 +45,7 @@ async function readRawWbsbArticle(tabId) {
 
 async function readRawWbsbArticleTitle(tabId) {
   try {
-    const [result] = await executePageScript(tabId, readWbsbArticleTitleFromPage);
+    const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["title"]);
     return result?.result || "";
   } catch (error) {
     throw new Error(`could not read WBSB article title: ${toErrorMessage(error)}`);
@@ -58,7 +54,7 @@ async function readRawWbsbArticleTitle(tabId) {
 
 async function writeRawWbsbArticle(tabId, article) {
   try {
-    const [result] = await executePageScript(tabId, writeWbsbArticleToPage, [article]);
+    const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["write", article]);
     const writeResult = result?.result;
     if (writeResult?.ok) {
       return;
