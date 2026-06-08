@@ -31,6 +31,14 @@ type editWorkflowOptions struct {
 	buildBody      func(context.Context, string, wsserver.Article) (string, error)
 }
 
+type pullWorkflowOptions struct {
+	addr           string
+	path           string
+	outputPath     string
+	allowedOrigins []string
+	stdout         io.Writer
+}
+
 func runEditWorkflow(parentCtx context.Context, options editWorkflowOptions) error {
 	title := strings.TrimSpace(options.title)
 	path := normalizeEndpointPath(options.path)
@@ -63,6 +71,44 @@ func runEditWorkflow(parentCtx context.Context, options editWorkflowOptions) err
 	}
 
 	return sendEditAndStop(ctx, session, options.stdout, title, body)
+}
+
+func runPullWorkflow(parentCtx context.Context, options pullWorkflowOptions) error {
+	path := normalizeEndpointPath(options.path)
+	ctx, stopSignals := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
+	session, err := startServerSession(ctx, options.stdout, wsserver.Config{
+		Addr:           options.addr,
+		Path:           path,
+		AllowedOrigins: options.allowedOrigins,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(options.stdout, "wbsb-remote-edit listening on ws://%s%s\n", options.addr, path)
+	fmt.Fprintln(options.stdout, "waiting for browser extension connection")
+
+	article, err := session.server.GetWBSBArticle(ctx)
+	if err != nil {
+		return stopSessionWithError(session, err)
+	}
+
+	writtenPath, err := writePulledArticle(options.outputPath, article)
+	if err != nil {
+		return stopSessionWithError(session, err)
+	}
+
+	serverRunErr := session.stop()
+	fmt.Fprintf(
+		options.stdout,
+		"pulled article %q (%d byte(s)) to %s; shut down WebSocket server\n",
+		strings.TrimSpace(article.Title),
+		len([]byte(article.Body)),
+		writtenPath,
+	)
+	return serverRunErr
 }
 
 func stopSessionWithError(session *serverSession, err error) error {

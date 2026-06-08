@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/aiwao/wbsb-remote-edit/internal/wsserver"
@@ -27,7 +28,8 @@ func newRootCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	}
 
 	cmd.AddCommand(newEditCmd(stdin, stdout, stderr))
-	cmd.AddCommand(newSendCmd(stdout))
+	cmd.AddCommand(newPushCmd(stdout))
+	cmd.AddCommand(newPullCmd(stdout))
 	return cmd
 }
 
@@ -69,15 +71,15 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-func newSendCmd(stdout io.Writer) *cobra.Command {
+func newPushCmd(stdout io.Writer) *cobra.Command {
 	var addr string
 	var path string
 	var title string
 	var allowedOrigins []string
 
 	cmd := &cobra.Command{
-		Use:   "send <markdown-path>",
-		Short: "Send a Markdown file to the browser extension",
+		Use:   "push <markdown-path>",
+		Short: "Push a Markdown file to the browser extension",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := readMarkdownFile(args[0])
@@ -112,6 +114,33 @@ func newSendCmd(stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
+func newPullCmd(stdout io.Writer) *cobra.Command {
+	var addr string
+	var path string
+	var allowedOrigins []string
+
+	cmd := &cobra.Command{
+		Use:   "pull <output-path>",
+		Short: "Pull the current article into a Markdown file",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPullWorkflow(cmd.Context(), pullWorkflowOptions{
+				addr:           addr,
+				path:           path,
+				outputPath:     args[0],
+				allowedOrigins: allowedOrigins,
+				stdout:         stdout,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:8787", "host:port to listen on")
+	cmd.Flags().StringVar(&path, "path", "/ws", "WebSocket endpoint path")
+	cmd.Flags().StringArrayVar(&allowedOrigins, "allow-origin", nil, "additional exact browser Origin values to accept")
+
+	return cmd
+}
+
 func normalizeEndpointPath(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -129,6 +158,42 @@ func readMarkdownFile(path string) (string, error) {
 		return "", err
 	}
 	return string(body), nil
+}
+
+func writePulledArticle(outputPath string, article wsserver.Article) (string, error) {
+	resolvedPath, err := resolvePullOutputPath(outputPath, article.Title)
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.WriteFile(resolvedPath, []byte(article.Body), 0o600); err != nil {
+		return "", err
+	}
+
+	return resolvedPath, nil
+}
+
+func resolvePullOutputPath(outputPath string, title string) (string, error) {
+	if strings.TrimSpace(outputPath) == "" {
+		return "", errors.New("output path is required")
+	}
+
+	info, err := os.Stat(outputPath)
+	if err == nil {
+		if info.IsDir() {
+			return filepath.Join(outputPath, articleMarkdownFileName(title)), nil
+		}
+		return outputPath, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return outputPath, nil
+	}
+
+	return "", err
+}
+
+func articleMarkdownFileName(title string) string {
+	return sanitizedTitleBase(title) + ".md"
 }
 
 func captureEditorBody(
@@ -175,6 +240,10 @@ func captureEditorBody(
 }
 
 func editorTempPattern(title string) string {
+	return sanitizedTitleBase(title) + "-*.md"
+}
+
+func sanitizedTitleBase(title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "untitled"
@@ -183,7 +252,7 @@ func editorTempPattern(title string) string {
 	var builder strings.Builder
 	lastWasDash := false
 	for _, r := range title {
-		if isTempFileNameUnsafe(r) {
+		if isFileNameUnsafe(r) {
 			if !lastWasDash {
 				builder.WriteByte('-')
 				lastWasDash = true
@@ -200,10 +269,10 @@ func editorTempPattern(title string) string {
 		base = "untitled"
 	}
 
-	return base + "-*.md"
+	return base
 }
 
-func isTempFileNameUnsafe(r rune) bool {
+func isFileNameUnsafe(r rune) bool {
 	switch r {
 	case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
 		return true
