@@ -1,6 +1,7 @@
 import {
   readWbsbArticleFromPage,
   readWbsbArticleTitleFromPage,
+  writeWbsbArticleToPage,
 } from "../wbsb/page-raw-markdown.js";
 import { executeScript, queryActiveTab, sendTabMessage } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
@@ -26,15 +27,17 @@ function executeContentScript(tabId) {
   });
 }
 
-async function executePageScript(tabId, func) {
+async function executePageScript(tabId, func, args = []) {
   try {
     return await executeScript({
+      args,
       func,
       target: { tabId },
       world: "MAIN",
     });
   } catch {
     return executeScript({
+      args,
       func,
       target: { tabId },
     });
@@ -64,6 +67,15 @@ async function readRawWbsbArticleTitle(tabId) {
     return result?.result || "";
   } catch (error) {
     throw new Error(`could not read WBSB article title: ${toErrorMessage(error)}`);
+  }
+}
+
+async function writeRawWbsbArticle(tabId, article) {
+  try {
+    const [result] = await executePageScript(tabId, writeWbsbArticleToPage, [article]);
+    return Boolean(result?.result?.ok);
+  } catch {
+    return false;
   }
 }
 
@@ -106,11 +118,17 @@ export async function readWbsbArticleTitle() {
 
 export async function writeWbsbArticle(article) {
   const tabId = activeTabId(await queryActiveTab());
+  const normalizedArticle = {
+    body: article.body || "",
+    title: article.title || "",
+  };
+
+  if (await writeRawWbsbArticle(tabId, normalizedArticle)) {
+    return;
+  }
+
   const response = await sendContentMessage(tabId, {
-    article: {
-      body: article.body || "",
-      title: article.title || "",
-    },
+    article: normalizedArticle,
     type: CONTENT_MESSAGE_TYPES.writeWbsbArticle,
   });
 
