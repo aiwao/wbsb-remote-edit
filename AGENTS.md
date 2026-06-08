@@ -16,6 +16,10 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit
 - The WebSocket endpoint defaults to `ws://127.0.0.1:8787/ws`.
 - Message bodies are represented only by `body`. Do not reintroduce a separate `content` field.
 
+## Change Policy
+
+- Destructive changes are allowed when they are necessary for the requested task.
+
 ### WebSocket Messages
 
 - CLI requests the current article:
