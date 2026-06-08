@@ -11,7 +11,3 @@ export const WS_MESSAGE_TYPES = Object.freeze({
   wbsbArticle: "wbsb_article",
   wbsbArticleTitle: "wbsb_article_title",
 });
-
-export const CONTENT_MESSAGE_TYPES = Object.freeze({
-  writeWbsbArticle: "write_wbsb_article",
-});

@@ -1,12 +1,10 @@
 import {
   readWbsbArticleFromPage,
   readWbsbArticleTitleFromPage,
+  writeWbsbArticleToPage,
 } from "../wbsb/page-raw-markdown.js";
-import { executeScript, queryActiveTab, sendTabMessage } from "../shared/extension-api.js";
+import { executeScript, queryActiveTab } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
-import { CONTENT_MESSAGE_TYPES } from "../shared/protocol.js";
-
-const CONTENT_SCRIPT_FILE = "assets/content.js";
 
 function activeTabId(tab) {
   if (!tab?.id) {
@@ -15,26 +13,17 @@ function activeTabId(tab) {
   return tab.id;
 }
 
-function executeContentScript(tabId) {
-  return executeScript({
-    files: [CONTENT_SCRIPT_FILE],
-    target: { tabId },
-  }).catch((error) => {
-    throw new Error(
-      `content script is not running and could not be injected: ${toErrorMessage(error)}`,
-    );
-  });
-}
-
-async function executePageScript(tabId, func) {
+async function executePageScript(tabId, func, args = []) {
   try {
     return await executeScript({
+      args,
       func,
       target: { tabId },
       world: "MAIN",
     });
   } catch {
     return executeScript({
+      args,
       func,
       target: { tabId },
     });
@@ -67,25 +56,16 @@ async function readRawWbsbArticleTitle(tabId) {
   }
 }
 
-function isMissingContentScriptError(error) {
-  const message = toErrorMessage(error).toLowerCase();
-  return (
-    message.includes("could not establish connection") ||
-    message.includes("receiving end does not exist") ||
-    message.includes("no matching message handler")
-  );
-}
-
-async function sendContentMessage(tabId, message) {
+async function writeRawWbsbArticle(tabId, article) {
   try {
-    return await sendTabMessage(tabId, message);
-  } catch (error) {
-    if (!isMissingContentScriptError(error)) {
-      throw error;
+    const [result] = await executePageScript(tabId, writeWbsbArticleToPage, [article]);
+    const writeResult = result?.result;
+    if (writeResult?.ok) {
+      return;
     }
-
-    await executeContentScript(tabId);
-    return sendTabMessage(tabId, message);
+    throw new Error(writeResult?.error || "could not write WBSB article");
+  } catch (error) {
+    throw new Error(`could not write raw WBSB markdown: ${toErrorMessage(error)}`);
   }
 }
 
@@ -106,15 +86,8 @@ export async function readWbsbArticleTitle() {
 
 export async function writeWbsbArticle(article) {
   const tabId = activeTabId(await queryActiveTab());
-  const response = await sendContentMessage(tabId, {
-    article: {
-      body: article.body || "",
-      title: article.title || "",
-    },
-    type: CONTENT_MESSAGE_TYPES.writeWbsbArticle,
+  await writeRawWbsbArticle(tabId, {
+    body: article.body || "",
+    title: article.title || "",
   });
-
-  if (!response?.ok) {
-    throw new Error(response?.error || "could not write WBSB article");
-  }
 }

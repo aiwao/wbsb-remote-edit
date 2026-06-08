@@ -8,13 +8,6 @@
   },
   "permissions": ["scripting"],
   "host_permissions": ["*://wbsb.dev/articles/new*"],
-  "content_scripts": [
-    {
-      "matches": ["*://wbsb.dev/articles/new*"],
-      "js": ["assets/content.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;"
   },
