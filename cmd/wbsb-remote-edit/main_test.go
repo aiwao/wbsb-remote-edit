@@ -15,11 +15,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestRootCommandHasEditAndSend(t *testing.T) {
+func TestRootCommandHasEditSendAndPull(t *testing.T) {
 	cmd := newRootCmd(io.Reader(bytes.NewReader(nil)), io.Discard, io.Discard)
 
 	var hasEdit bool
 	var hasSend bool
+	var hasPull bool
 	for _, child := range cmd.Commands() {
 		if child.Name() == "edit" {
 			hasEdit = true
@@ -27,6 +28,10 @@ func TestRootCommandHasEditAndSend(t *testing.T) {
 		}
 		if child.Name() == "send" {
 			hasSend = true
+			continue
+		}
+		if child.Name() == "pull" {
+			hasPull = true
 			continue
 		}
 		if !child.Hidden {
@@ -39,6 +44,9 @@ func TestRootCommandHasEditAndSend(t *testing.T) {
 	}
 	if !hasSend {
 		t.Fatal("root command does not have send")
+	}
+	if !hasPull {
+		t.Fatal("root command does not have pull")
 	}
 }
 
@@ -70,6 +78,23 @@ func TestSendCommandAcceptsMarkdownPathAndTitleFlag(t *testing.T) {
 	}
 	if err := cmd.Args(cmd, []string{"one.md", "two.md"}); err == nil {
 		t.Fatal("send command accepts multiple markdown paths")
+	}
+}
+
+func TestPullCommandAcceptsOutputPath(t *testing.T) {
+	cmd := newPullCmd(io.Discard)
+
+	if cmd.Flags().Lookup("path") == nil {
+		t.Fatal("pull command does not have path flag")
+	}
+	if err := cmd.Args(cmd, []string{"draft.md"}); err != nil {
+		t.Fatalf("pull command rejects one output path: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{}); err == nil {
+		t.Fatal("pull command accepts no output path")
+	}
+	if err := cmd.Args(cmd, []string{"one.md", "two.md"}); err == nil {
+		t.Fatal("pull command accepts multiple output paths")
 	}
 }
 
@@ -105,6 +130,54 @@ func TestReadMarkdownFile(t *testing.T) {
 	}
 	if got != "# Draft\n\nbody\n" {
 		t.Fatalf("body = %q, want markdown file contents", got)
+	}
+}
+
+func TestWritePulledArticleUsesFilePath(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "pulled.md")
+
+	gotPath, err := writePulledArticle(outputPath, wsserver.Article{
+		Title: "Ignored title",
+		Body:  "pulled body",
+	})
+	if err != nil {
+		t.Fatalf("write pulled article: %v", err)
+	}
+	if gotPath != outputPath {
+		t.Fatalf("written path = %q, want %q", gotPath, outputPath)
+	}
+
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read pulled file: %v", err)
+	}
+	if string(got) != "pulled body" {
+		t.Fatalf("body = %q, want pulled body", got)
+	}
+}
+
+func TestWritePulledArticleUsesDirectoryAndTitle(t *testing.T) {
+	dir := t.TempDir()
+
+	gotPath, err := writePulledArticle(dir, wsserver.Article{
+		Title: "a/b*c",
+		Body:  "pulled body",
+	})
+	if err != nil {
+		t.Fatalf("write pulled article: %v", err)
+	}
+
+	wantPath := filepath.Join(dir, "a-b-c.md")
+	if gotPath != wantPath {
+		t.Fatalf("written path = %q, want %q", gotPath, wantPath)
+	}
+
+	got, err := os.ReadFile(wantPath)
+	if err != nil {
+		t.Fatalf("read pulled file: %v", err)
+	}
+	if string(got) != "pulled body" {
+		t.Fatalf("body = %q, want pulled body", got)
 	}
 }
 
@@ -169,6 +242,58 @@ func TestRunEditWorkflowAllowsBlankTitle(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("timed out waiting for edit workflow")
+	}
+}
+
+func TestRunPullWorkflowWritesArticleToFile(t *testing.T) {
+	addr := reserveLocalAddr(t)
+	outputPath := filepath.Join(t.TempDir(), "article.md")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- runPullWorkflow(ctx, pullWorkflowOptions{
+			addr:       addr,
+			path:       "/ws",
+			outputPath: outputPath,
+			stdout:     io.Discard,
+		})
+	}()
+
+	conn := dialWorkflowWebSocket(t, addr)
+	defer conn.Close()
+
+	readWorkflowMessage(t, conn, wsserver.MessageTypeConnected)
+	request := readWorkflowMessage(t, conn, wsserver.MessageTypeGetWBSBArticle)
+	if request.ID == "" {
+		t.Fatal("article request ID is blank")
+	}
+
+	if err := conn.WriteJSON(wsserver.Message{
+		Type:  wsserver.MessageTypeWBSBArticle,
+		ID:    request.ID,
+		Title: "Draft",
+		Body:  "pulled body",
+	}); err != nil {
+		t.Fatalf("write article message: %v", err)
+	}
+
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("run pull workflow: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for pull workflow")
+	}
+
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read pulled file: %v", err)
+	}
+	if string(got) != "pulled body" {
+		t.Fatalf("body = %q, want pulled body", got)
 	}
 }
 
