@@ -1,98 +1,97 @@
-# Remote Edit Bridge
+# wbsb-remote-edit
 
-Browser extension popup and a Go/Cobra CLI communicate over WebSocket. The Vue/Vite+ extension lives in `extension/` and builds to `extension/dist/`.
+A tool that lets you write articles for [wbsb.dev](https://wbsb.dev) in your favorite text editor.
 
-The CLI sends:
+## CLI: Commands
 
-```json
-{ "type": "edit", "title": "Draft", "body": "Text written in the editor", "from": "cli" }
-```
+All commands share the following options.
 
-Before opening the editor, the CLI requests the current article from the extension:
+* `--addr`: The address of the bridge server to start, in `host:port` format. **By default, `127.0.0.1:8787` is used.**
+* `--allow-origin`: Origins that are allowed to connect to the bridge server.
+* `--path`: The endpoint path for the bridge WebSocket server. **By default, `/ws` is used.**
 
-```json
-{ "type": "get_wbsb_article", "from": "cli" }
-```
-
-The CLI can also request only the current article title:
-
-```json
-{ "type": "get_wbsb_article_title", "from": "cli" }
-```
-
-The Vue extension reads `get_wbsb_article` and `get_wbsb_article_title` only from `*://wbsb.dev/articles/new`. It takes the title from the article title input and reads the article body from wbsb's TipTap Markdown state only for `get_wbsb_article`.
-
-## Run the CLI
+### edit
 
 ```sh
-nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft"
-nix develop --command go run ./cmd/wbsb-remote-edit push ./draft.md --title "Draft"
+wbsb-remote-edit edit
 ```
 
-## Build with Nix
+Start editing an article in your favorite text editor.
+
+**Options**
+
+* `--title`: The article title.
+* `--editor`: The editor to use. **By default, `$EDITOR` is opened.**
+
+### push
 
 ```sh
-mkdir -p build
-nix build .# -o build/release
-nix build .#wbsb-remote-edit -o build/cli
-nix build .#wbsb-remote-edit-extension -o build/extension
+wbsb-remote-edit push README.md
 ```
 
-The default build includes the CLI at `build/release/bin/wbsb-remote-edit` and the browser extension at `build/release/extension`. The project version is defined once in `flake.nix`.
+Send Markdown to the browser editor.
 
-## Release Workflow
+**Arguments**
 
-The manual GitHub Actions release workflow reads the version from `nix run .#version`, refuses to continue if `v<version>` already exists, builds with Nix, packages CLI binaries for Linux, macOS, and Windows on amd64 and arm64, packages Chrome ZIP and Firefox signed XPI extensions, then creates the GitHub Release using a GitHub App token. It expects these repository secrets: `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY`, `AMO_JWT_ISSUER`, and `AMO_JWT_SECRET`. The GitHub App must be installed on the repository with contents write access, and the AMO secrets are the addons.mozilla.org JWT issuer and JWT secret used by `web-ext sign`. If the Firefox extension version already exists on AMO, `nix run .#amo-version-exists` downloads the existing signed XPI and uses it as the release asset.
+* `markdown-path`: The Markdown file to send to the browser editor. **This argument is required.**
+* `--title`: The article title.
 
-Defaults:
-
-- WebSocket endpoint: `ws://127.0.0.1:8787/ws`
-- Browser extension origins: `chrome-extension://...` and `moz-extension://...` are accepted
-- Local dev origins: `http://localhost`, `http://127.0.0.1`, and loopback IPs are accepted
-
-The command starts the local WebSocket server, waits for the extension to connect, requests the current article, opens `$EDITOR` with the returned body, and sends the title plus the saved editor content to the extension after the editor exits. The extension acknowledges the received edit after displaying it, then the CLI shuts down the WebSocket server. Use `--editor` to override `$EDITOR`. Use `--title` to override the article title returned by the extension.
-
-Use `push <markdown-path>` to send an existing Markdown file without opening an editor. If `--title` is omitted, `push` requests the current article title from the extension and sends that title with the file body.
-
-## Build the Vue Extension
+### pull
 
 ```sh
-nix develop --command sh -lc 'cd extension && pnpm run build'
+wbsb-remote-edit pull Article.md
 ```
 
-Validate the built Manifest V3 extension with:
+Receive an article from the browser editor.
+
+**Arguments**
+
+* `output-path`: The destination file or directory. **This argument is required.**
+
+## CLI: Download
+
+Download and extract the file from [Release](https://github.com/aiwao/wbsb-remote-edit/releases/latest).
+
+**For Windows**
+
+wbsb-remote-edit-cli-<version>-windows-<CPU architecture>.zip
+
+**For Mac**
+
+wbsb-remote-edit-cli-<version>-darwin-<CPU architecture>.tar.gz
+
+**For Linux**
+
+wbsb-remote-edit-cli-<version>-linux-<CPU architecture>.tar.gz
+
+## Browser Extension: Features
+
+### Endpoint Input
+
+This endpoint is used as the bridge server.
+
+### Auto Connect Switch
+
+While this switch is on, the extension keeps connecting to the bridge server specified in the `Endpoint input`.
+
+## Browser Extension: Installation
+
+Download and install the file from [Release](https://github.com/aiwao/wbsb-remote-edit/releases/latest).
+
+**For Chrome**
+
+wbsb-remote-edit-chrome-<version>.zip
+
+**For Firefox**
+
+wbsb-remote-edit-firefox-<version>.xpi
+
+## Development: Environment Setup
+
+`nix develop` or [nix-direnv](https://github.com/nix-community/nix-direnv)
+
+## Development: Build
 
 ```sh
-nix develop --command web-ext lint --source-dir extension/dist
-```
-
-## Load in Chrome
-
-1. Open `chrome://extensions`.
-2. Enable Developer mode.
-3. Click Load unpacked.
-4. Select the `extension/dist/` directory in this repository.
-5. Open the extension popup and connect.
-
-## Load in Firefox
-
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click Load Temporary Add-on.
-3. Select `extension/dist/manifest.json` in this repository.
-4. Open the extension popup and connect.
-
-## Browser Compatibility Notes
-
-- The extension uses Manifest V3 and avoids browser-specific JavaScript APIs in the popup.
-- The content script and host permission are limited to `*://wbsb.dev/articles/new`.
-- The explicit `content_security_policy` allows `ws://localhost:*` and `ws://127.0.0.1:*`, which keeps Firefox from upgrading the local WebSocket endpoint to `wss://`.
-
-## Useful Commands
-
-```sh
-nix develop --command go test ./...
-nix develop --command go run ./cmd/wbsb-remote-edit edit --title "Draft" --addr 127.0.0.1:8787
-nix develop --command go run ./cmd/wbsb-remote-edit push ./draft.md --title "Draft"
-nix develop --command sh -lc 'cd extension && pnpm run build'
-nix develop --command web-ext lint --source-dir extension/dist
+nix build .# -o build/
 ```
