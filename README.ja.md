@@ -84,3 +84,13 @@ wbsb-remote-edit-chrome-<バージョン>.zip
 **Firefoxの場合**
 
 wbsb-remote-edit-firefox-<バージョン>.xpi
+
+## 開発: 環境構築
+
+`nix develop`または[nix-direnv](https://github.com/nix-community/nix-direnv)
+
+## 開発: ビルド
+
+```sh
+nix build .# -o build/
+```
