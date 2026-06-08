@@ -15,19 +15,19 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestRootCommandHasEditSendAndPull(t *testing.T) {
+func TestRootCommandHasEditPushAndPull(t *testing.T) {
 	cmd := newRootCmd(io.Reader(bytes.NewReader(nil)), io.Discard, io.Discard)
 
 	var hasEdit bool
-	var hasSend bool
+	var hasPush bool
 	var hasPull bool
 	for _, child := range cmd.Commands() {
 		if child.Name() == "edit" {
 			hasEdit = true
 			continue
 		}
-		if child.Name() == "send" {
-			hasSend = true
+		if child.Name() == "push" {
+			hasPush = true
 			continue
 		}
 		if child.Name() == "pull" {
@@ -42,8 +42,8 @@ func TestRootCommandHasEditSendAndPull(t *testing.T) {
 	if !hasEdit {
 		t.Fatal("root command does not have edit")
 	}
-	if !hasSend {
-		t.Fatal("root command does not have send")
+	if !hasPush {
+		t.Fatal("root command does not have push")
 	}
 	if !hasPull {
 		t.Fatal("root command does not have pull")
@@ -64,20 +64,20 @@ func TestEditCommandUsesTitleFlagAndNoPositionals(t *testing.T) {
 	}
 }
 
-func TestSendCommandAcceptsMarkdownPathAndTitleFlag(t *testing.T) {
-	cmd := newSendCmd(io.Discard)
+func TestPushCommandAcceptsMarkdownPathAndTitleFlag(t *testing.T) {
+	cmd := newPushCmd(io.Discard)
 
 	if cmd.Flags().Lookup("title") == nil {
-		t.Fatal("send command does not have title flag")
+		t.Fatal("push command does not have title flag")
 	}
 	if err := cmd.Args(cmd, []string{"draft.md"}); err != nil {
-		t.Fatalf("send command rejects one markdown path: %v", err)
+		t.Fatalf("push command rejects one markdown path: %v", err)
 	}
 	if err := cmd.Args(cmd, []string{}); err == nil {
-		t.Fatal("send command accepts no markdown path")
+		t.Fatal("push command accepts no markdown path")
 	}
 	if err := cmd.Args(cmd, []string{"one.md", "two.md"}); err == nil {
-		t.Fatal("send command accepts multiple markdown paths")
+		t.Fatal("push command accepts multiple markdown paths")
 	}
 }
 
@@ -210,7 +210,6 @@ func TestRunEditWorkflowAllowsBlankTitle(t *testing.T) {
 	conn := dialWorkflowWebSocket(t, addr)
 	defer conn.Close()
 
-	readWorkflowMessage(t, conn, wsserver.MessageTypeConnected)
 	request := readWorkflowMessage(t, conn, wsserver.MessageTypeGetWBSBArticle)
 	if request.ID == "" {
 		t.Fatal("article request ID is blank")
@@ -264,7 +263,6 @@ func TestRunPullWorkflowWritesArticleToFile(t *testing.T) {
 	conn := dialWorkflowWebSocket(t, addr)
 	defer conn.Close()
 
-	readWorkflowMessage(t, conn, wsserver.MessageTypeConnected)
 	request := readWorkflowMessage(t, conn, wsserver.MessageTypeGetWBSBArticle)
 	if request.ID == "" {
 		t.Fatal("article request ID is blank")

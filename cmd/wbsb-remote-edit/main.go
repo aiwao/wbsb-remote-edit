@@ -28,7 +28,7 @@ func newRootCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	}
 
 	cmd.AddCommand(newEditCmd(stdin, stdout, stderr))
-	cmd.AddCommand(newSendCmd(stdout))
+	cmd.AddCommand(newPushCmd(stdout))
 	cmd.AddCommand(newPullCmd(stdout))
 	return cmd
 }
@@ -71,15 +71,15 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-func newSendCmd(stdout io.Writer) *cobra.Command {
+func newPushCmd(stdout io.Writer) *cobra.Command {
 	var addr string
 	var path string
 	var title string
 	var allowedOrigins []string
 
 	cmd := &cobra.Command{
-		Use:   "send <markdown-path>",
-		Short: "Send a Markdown file to the browser extension",
+		Use:   "push <markdown-path>",
+		Short: "Push a Markdown file to the browser extension",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := readMarkdownFile(args[0])
