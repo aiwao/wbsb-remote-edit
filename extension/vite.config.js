@@ -1,22 +1,34 @@
 import { defineConfig } from "vite-plus";
 import vue from "@vitejs/plugin-vue";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
 const projectVersion =
-  process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromFlake();
+  process.env.WBSB_REMOTE_EDIT_VERSION?.trim() || readProjectVersionFromNix();
 
-function readProjectVersionFromFlake() {
-  const flakePath = fileURLToPath(new URL("../flake.nix", import.meta.url));
-  const flake = readFileSync(flakePath, "utf8");
-  const versionMatch = flake.match(/\bversion\s*=\s*"([^"]+)";/);
+function readProjectVersionFromNix() {
+  const repoRoot = fileURLToPath(new URL("../", import.meta.url));
 
-  if (!versionMatch) {
-    throw new Error(`Could not read project version from ${flakePath}`);
+  try {
+    const version = execFileSync("nix", ["run", ".#version"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+
+    if (!version) {
+      throw new Error("nix run .#version returned an empty version");
+    }
+
+    return version;
+  } catch (error) {
+    const stderr = error?.stderr?.toString().trim();
+    const detail = stderr || (error instanceof Error ? error.message : String(error));
+
+    throw new Error(`Could not read project version by running nix run .#version: ${detail}`);
   }
-
-  return versionMatch[1];
 }
 
 function manifestVersionPlugin() {
