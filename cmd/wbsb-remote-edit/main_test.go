@@ -56,6 +56,9 @@ func TestEditCommandUsesTitleFlagAndNoPositionals(t *testing.T) {
 	if cmd.Flags().Lookup("title") == nil {
 		t.Fatal("edit command does not have title flag")
 	}
+	if cmd.Flags().Lookup("file") == nil {
+		t.Fatal("edit command does not have file flag")
+	}
 	if err := cmd.Args(cmd, []string{}); err != nil {
 		t.Fatalf("edit command rejects empty args: %v", err)
 	}
@@ -241,6 +244,64 @@ func TestRunEditWorkflowAllowsBlankTitle(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("timed out waiting for edit workflow")
+	}
+}
+
+func TestEditCommandUsesFileFlagAsEditorInitialBody(t *testing.T) {
+	addr := reserveLocalAddr(t)
+	filePath := filepath.Join(t.TempDir(), "seed.md")
+	if err := os.WriteFile(filePath, []byte("file seed"), 0o600); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+
+	editor := `sh -c 'test "$(cat "$1")" = "file seed" && printf "edited file body" > "$1"' sh`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	cmd := newEditCmd(bytes.NewReader(nil), io.Discard, io.Discard)
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--addr", addr, "--file", filePath, "--editor", editor})
+
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- cmd.Execute()
+	}()
+
+	conn := dialWorkflowWebSocket(t, addr)
+	defer conn.Close()
+
+	request := readWorkflowMessage(t, conn, wsserver.MessageTypeGetWBSBArticle)
+	if request.ID == "" {
+		t.Fatal("article request ID is blank")
+	}
+
+	if err := conn.WriteJSON(wsserver.Message{
+		Type:  wsserver.MessageTypeWBSBArticle,
+		ID:    request.ID,
+		Title: "Draft",
+		Body:  "browser seed",
+	}); err != nil {
+		t.Fatalf("write article message: %v", err)
+	}
+
+	edit := readWorkflowMessage(t, conn, wsserver.MessageTypeEdit)
+	if edit.Title != "Draft" {
+		t.Fatalf("edit title = %q, want Draft", edit.Title)
+	}
+	if edit.Body != "edited file body" {
+		t.Fatalf("edit body = %q, want edited file body", edit.Body)
+	}
+	if err := conn.WriteJSON(wsserver.Message{Type: wsserver.MessageTypeAck, ID: edit.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("run edit command: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for edit command")
 	}
 }
 

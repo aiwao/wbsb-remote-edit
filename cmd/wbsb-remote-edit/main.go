@@ -37,12 +37,13 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	var addr string
 	var path string
 	var editor string
+	var file string
 	var title string
 	var allowedOrigins []string
 
 	cmd := &cobra.Command{
 		Use:   "edit",
-		Short: "Open an editor and publish the written content",
+		Short: "Edit an article body locally and push it to the browser extension",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEditWorkflow(cmd.Context(), editWorkflowOptions{
@@ -55,8 +56,17 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 					return server.GetWBSBArticle(ctx)
 				},
 				buildBody: func(ctx context.Context, title string, article wsserver.Article) (string, error) {
-					fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(article.Body)))
-					return captureEditorBody(ctx, editor, title, article.Body, stdin, stdout, stderr)
+					initialBody := article.Body
+					if file != "" {
+						var err error
+						initialBody, err = readMarkdownFile(file)
+						if err != nil {
+							return "", err
+						}
+					}
+
+					fmt.Fprintf(stdout, "received article %q (%d byte(s)); opening editor\n", title, len([]byte(initialBody)))
+					return captureEditorBody(ctx, editor, title, initialBody, stdin, stdout, stderr)
 				},
 			})
 		},
@@ -65,6 +75,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:8787", "host:port to listen on")
 	cmd.Flags().StringVar(&path, "path", "/ws", "WebSocket endpoint path")
 	cmd.Flags().StringVar(&editor, "editor", "", "editor command to run; defaults to $EDITOR")
+	cmd.Flags().StringVar(&file, "file", "", "Markdown file to use as the editor initial body")
 	cmd.Flags().StringVar(&title, "title", "", fmt.Sprintf("title to publish; defaults to %s response title", wsserver.MessageTypeGetWBSBArticle))
 	cmd.Flags().StringArrayVar(&allowedOrigins, "allow-origin", nil, "additional exact browser Origin values to accept")
 
