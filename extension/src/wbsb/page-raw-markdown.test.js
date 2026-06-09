@@ -9,36 +9,70 @@ import {
 const originalDocument = globalThis.document;
 const originalEvent = globalThis.Event;
 const originalLocation = globalThis.location;
-const originalXPathResult = globalThis.XPathResult;
 
 function node(properties = {}) {
   return Object.assign({}, properties);
 }
 
-function documentWith({ nodes = [], title = "" }) {
+function documentWith({ nodes = [], title = "", titleAttributes = {} }) {
+  const attributes = {
+    "aria-label": "タイトル",
+    maxlength: "70",
+    placeholder: "Title",
+    type: "text",
+    ...titleAttributes,
+  };
   const titleInput = {
+    ariaLabel: attributes["aria-label"],
     dispatchedEvents: [],
     dispatchEvent(event) {
       this.dispatchedEvents.push(event.type);
       return true;
     },
+    getAttribute(name) {
+      return attributes[name] ?? null;
+    },
+    id: attributes.id || "",
+    maxLength: Number(attributes.maxlength || 0),
+    name: attributes.name || "",
+    placeholder: attributes.placeholder || "",
+    type: attributes.type || "text",
     value: title,
   };
   const document = {
     body: node(),
     documentElement: node(),
-    evaluate() {
-      return {
-        singleNodeValue: titleInput,
-      };
-    },
     querySelector(selector) {
       if (selector === ".ProseMirror") {
         return nodes.find((node) => node.className === "ProseMirror") || null;
       }
+      if (
+        selector === 'input[aria-label="タイトル"]' &&
+        titleInput.getAttribute("aria-label") === "タイトル"
+      ) {
+        return titleInput;
+      }
+      if (
+        selector === 'input[placeholder="Title" i]' &&
+        titleInput.placeholder.toLowerCase() === "title"
+      ) {
+        return titleInput;
+      }
+      if (selector === 'input[name="title" i]' && titleInput.name.toLowerCase() === "title") {
+        return titleInput;
+      }
+      if (selector === 'input[id="title" i]' && titleInput.id.toLowerCase() === "title") {
+        return titleInput;
+      }
+      if (selector === 'input[maxlength="70"]' && titleInput.getAttribute("maxlength") === "70") {
+        return titleInput;
+      }
       return null;
     },
-    querySelectorAll() {
+    querySelectorAll(selector) {
+      if (selector === "input") {
+        return [titleInput];
+      }
       return nodes;
     },
     titleInput,
@@ -65,11 +99,9 @@ describe("readWbsbArticleFromPage", () => {
       configurable: true,
       value: originalLocation,
     });
-    globalThis.XPathResult = originalXPathResult;
   });
 
-  it("reads only the article title from the title XPath", () => {
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
+  it("reads only the article title from the semantic title input", () => {
     globalThis.document = documentWith({
       nodes: [],
       title: "Title Only",
@@ -78,8 +110,19 @@ describe("readWbsbArticleFromPage", () => {
     expect(readWbsbArticleTitleFromPage()).toBe("Title Only");
   });
 
+  it("reads the article title from the placeholder when the aria label changes", () => {
+    globalThis.document = documentWith({
+      nodes: [],
+      title: "Placeholder Title",
+      titleAttributes: {
+        "aria-label": "",
+      },
+    });
+
+    expect(readWbsbArticleTitleFromPage()).toBe("Placeholder Title");
+  });
+
   it("finds raw markdown from a TipTap editor inside a React object graph", () => {
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     const tiptapEditor = {
       storage: {
         markdown: {
@@ -112,7 +155,6 @@ describe("readWbsbArticleFromPage", () => {
   });
 
   it("finds raw markdown from the official TipTap Markdown editor API", () => {
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     const tiptapEditor = {
       getMarkdown: () => "official markdown",
     };
@@ -135,7 +177,6 @@ describe("readWbsbArticleFromPage", () => {
   });
 
   it("returns ok false when no TipTap markdown storage is visible", () => {
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     globalThis.document = documentWith({
       nodes: [node({ className: "ProseMirror" })],
       title: "Fallback",
@@ -153,7 +194,6 @@ describe("readWbsbArticleFromPage", () => {
         this.type = type;
       }
     };
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     setArticleLocation();
 
     const setContentCalls = [];
@@ -210,7 +250,6 @@ describe("readWbsbArticleFromPage", () => {
         this.type = type;
       }
     };
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     setArticleLocation();
 
     const setContentCalls = [];
@@ -260,7 +299,6 @@ describe("readWbsbArticleFromPage", () => {
         this.type = type;
       }
     };
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     setArticleLocation("/articles/article-1/edit");
 
     const setContentCalls = [];
@@ -310,7 +348,6 @@ describe("readWbsbArticleFromPage", () => {
         this.type = type;
       }
     };
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     setArticleLocation("/articles/article-1");
     globalThis.document = documentWith({
       nodes: [node({ className: "ProseMirror" })],
@@ -330,7 +367,6 @@ describe("readWbsbArticleFromPage", () => {
         this.type = type;
       }
     };
-    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
     setArticleLocation();
     globalThis.document = documentWith({
       nodes: [node({ className: "ProseMirror" })],
