@@ -2,6 +2,15 @@
 
 A tool that lets you write articles for [wbsb.dev](https://wbsb.dev) in your favorite text editor.
 
+[日本語](./README.ja.md)
+
+## Usage
+
+1. Open wbsb.dev.
+2. Open the browser extension popup and turn on the `Auto connect` switch.
+3. Run the command in the CLI.
+4. Once both the browser extension and CLI are connected to the bridge server, it is ready to use.
+
 ## CLI: Commands
 
 All commands share the following options.
