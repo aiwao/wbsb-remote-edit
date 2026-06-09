@@ -43,7 +43,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "edit",
-		Short: "Open an editor and publish the written content",
+		Short: "Edit an article body locally and push it to the browser extension",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEditWorkflow(cmd.Context(), editWorkflowOptions{
