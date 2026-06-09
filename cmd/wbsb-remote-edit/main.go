@@ -38,6 +38,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	var path string
 	var editor string
 	var file string
+	var saveTo string
 	var title string
 	var allowedOrigins []string
 
@@ -49,6 +50,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 			return runEditWorkflow(cmd.Context(), editWorkflowOptions{
 				addr:           addr,
 				path:           path,
+				saveTo:         saveTo,
 				title:          title,
 				allowedOrigins: allowedOrigins,
 				stdout:         stdout,
@@ -76,6 +78,7 @@ func newEditCmd(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "/ws", "WebSocket endpoint path")
 	cmd.Flags().StringVar(&editor, "editor", "", "editor command to run; defaults to $EDITOR")
 	cmd.Flags().StringVar(&file, "file", "", "Markdown file to use as the editor initial body")
+	cmd.Flags().StringVar(&saveTo, "save-to", "", "file or directory path to save the edited Markdown")
 	cmd.Flags().StringVar(&title, "title", "", fmt.Sprintf("title to publish; defaults to %s response title", wsserver.MessageTypeGetWBSBArticle))
 	cmd.Flags().StringArrayVar(&allowedOrigins, "allow-origin", nil, "additional exact browser Origin values to accept")
 
@@ -171,8 +174,8 @@ func readMarkdownFile(path string) (string, error) {
 	return string(body), nil
 }
 
-func writePulledArticle(outputPath string, article wsserver.Article) (string, error) {
-	resolvedPath, err := resolvePullOutputPath(outputPath, article.Title)
+func writeLocalArticle(outputPath string, article wsserver.Article) (string, error) {
+	resolvedPath, err := resolveArticleOutputPath(outputPath, article.Title)
 	if err != nil {
 		return "", err
 	}
@@ -184,7 +187,7 @@ func writePulledArticle(outputPath string, article wsserver.Article) (string, er
 	return resolvedPath, nil
 }
 
-func resolvePullOutputPath(outputPath string, title string) (string, error) {
+func resolveArticleOutputPath(outputPath string, title string) (string, error) {
 	if strings.TrimSpace(outputPath) == "" {
 		return "", errors.New("output path is required")
 	}

@@ -59,6 +59,9 @@ func TestEditCommandUsesTitleFlagAndNoPositionals(t *testing.T) {
 	if cmd.Flags().Lookup("file") == nil {
 		t.Fatal("edit command does not have file flag")
 	}
+	if cmd.Flags().Lookup("save-to") == nil {
+		t.Fatal("edit command does not have save-to flag")
+	}
 	if err := cmd.Args(cmd, []string{}); err != nil {
 		t.Fatalf("edit command rejects empty args: %v", err)
 	}
@@ -136,10 +139,10 @@ func TestReadMarkdownFile(t *testing.T) {
 	}
 }
 
-func TestWritePulledArticleUsesFilePath(t *testing.T) {
+func TestWriteLocalArticleUsesFilePath(t *testing.T) {
 	outputPath := filepath.Join(t.TempDir(), "pulled.md")
 
-	gotPath, err := writePulledArticle(outputPath, wsserver.Article{
+	gotPath, err := writeLocalArticle(outputPath, wsserver.Article{
 		Title: "Ignored title",
 		Body:  "pulled body",
 	})
@@ -159,10 +162,10 @@ func TestWritePulledArticleUsesFilePath(t *testing.T) {
 	}
 }
 
-func TestWritePulledArticleUsesDirectoryAndTitle(t *testing.T) {
+func TestWriteLocalArticleUsesDirectoryAndTitle(t *testing.T) {
 	dir := t.TempDir()
 
-	gotPath, err := writePulledArticle(dir, wsserver.Article{
+	gotPath, err := writeLocalArticle(dir, wsserver.Article{
 		Title: "a/b*c",
 		Body:  "pulled body",
 	})
@@ -302,6 +305,71 @@ func TestEditCommandUsesFileFlagAsEditorInitialBody(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("timed out waiting for edit command")
+	}
+}
+
+func TestRunEditWorkflowSavesEditedArticle(t *testing.T) {
+	addr := reserveLocalAddr(t)
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- runEditWorkflow(ctx, editWorkflowOptions{
+			addr:   addr,
+			path:   "/ws",
+			saveTo: dir,
+			stdout: io.Discard,
+			loadArticle: func(ctx context.Context, server *wsserver.Server, _ string) (wsserver.Article, error) {
+				return server.GetWBSBArticle(ctx)
+			},
+			buildBody: func(context.Context, string, wsserver.Article) (string, error) {
+				return "edited body", nil
+			},
+		})
+	}()
+
+	conn := dialWorkflowWebSocket(t, addr)
+	defer conn.Close()
+
+	request := readWorkflowMessage(t, conn, wsserver.MessageTypeGetWBSBArticle)
+	if request.ID == "" {
+		t.Fatal("article request ID is blank")
+	}
+
+	if err := conn.WriteJSON(wsserver.Message{
+		Type:  wsserver.MessageTypeWBSBArticle,
+		ID:    request.ID,
+		Title: "Draft",
+		Body:  "seed body",
+	}); err != nil {
+		t.Fatalf("write article message: %v", err)
+	}
+
+	edit := readWorkflowMessage(t, conn, wsserver.MessageTypeEdit)
+	if edit.Body != "edited body" {
+		t.Fatalf("edit body = %q, want edited body", edit.Body)
+	}
+	if err := conn.WriteJSON(wsserver.Message{Type: wsserver.MessageTypeAck, ID: edit.ID}); err != nil {
+		t.Fatalf("write ack message: %v", err)
+	}
+
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("run edit workflow: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for edit workflow")
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, "Draft.md"))
+	if err != nil {
+		t.Fatalf("read saved file: %v", err)
+	}
+	if string(got) != "edited body" {
+		t.Fatalf("saved body = %q, want edited body", got)
 	}
 }
 
