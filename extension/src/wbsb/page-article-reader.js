@@ -3,7 +3,13 @@ export function runWbsbArticlePageAction(action, article) {
   const MAX_OBJECTS = 5000;
   const ARTICLE_MATCH = "*://wbsb.dev/articles/new* or *://wbsb.dev/articles/*/edit*";
   const EDIT_ARTICLE_PATH_PATTERN = /^\/articles\/[^/]+\/edit$/;
-  const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
+  const TITLE_INPUT_SELECTORS = [
+    'input[aria-label="タイトル"]',
+    'input[placeholder="Title" i]',
+    'input[name="title" i]',
+    'input[id="title" i]',
+    'input[maxlength="70"]',
+  ];
   const REACT_PROPERTY_PATTERN = /^__(reactFiber|reactProps|reactContainer)\$/;
   const NOT_FOUND = Symbol("not found");
 
@@ -17,8 +23,66 @@ export function runWbsbArticlePageAction(action, article) {
   }
 
   function readTitleInput() {
-    return document.evaluate(TITLE_XPATH, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
-      .singleNodeValue;
+    for (const selector of TITLE_INPUT_SELECTORS) {
+      const input = document.querySelector(selector);
+      if (isTitleInput(input)) {
+        return input;
+      }
+    }
+
+    return Array.from(document.querySelectorAll("input")).find(isTitleInput) || null;
+  }
+
+  function attributeValue(element, name) {
+    try {
+      return element?.getAttribute?.(name) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function fieldValue(element, name) {
+    try {
+      const value = element?.[name];
+      return typeof value === "string" || typeof value === "number" ? String(value) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function normalizedInputType(input) {
+    return (attributeValue(input, "type") || fieldValue(input, "type") || "text").toLowerCase();
+  }
+
+  function normalizedInputName(input, attributeName, propertyName = attributeName) {
+    return (attributeValue(input, attributeName) || fieldValue(input, propertyName))
+      .trim()
+      .toLowerCase();
+  }
+
+  function isTitleInput(input) {
+    if (!input || !("value" in input)) {
+      return false;
+    }
+
+    const type = normalizedInputType(input);
+    if (type !== "text" && type !== "") {
+      return false;
+    }
+
+    const ariaLabel = normalizedInputName(input, "aria-label", "ariaLabel");
+    const placeholder = normalizedInputName(input, "placeholder");
+    const name = normalizedInputName(input, "name");
+    const id = normalizedInputName(input, "id");
+    const maxLength = normalizedInputName(input, "maxlength", "maxLength");
+
+    return (
+      ariaLabel === "タイトル" ||
+      placeholder === "title" ||
+      name === "title" ||
+      id === "title" ||
+      maxLength === "70"
+    );
   }
 
   function readTitle() {
