@@ -15,7 +15,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        version = "0.0.6";
+        version = "0.0.7";
         # pnpm 10 reads this lockfile and avoids pnpm 11 fetcher instability on Darwin.
         pnpm = pkgs.pnpm_10;
         wbsbRemoteEdit = pkgs.buildGoModule {
