@@ -1,12 +1,80 @@
 import { runWbsbArticlePageAction } from "../wbsb/page-raw-markdown.js";
-import { executeScript, queryActiveTab } from "../shared/extension-api.js";
+import { executeScript, getTab, queryActiveTab, updateTab } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
 
+const WBSB_NEW_ARTICLE_URL = "https://wbsb.dev/articles/new";
+const PAGE_READY_TIMEOUT_MS = 30000;
+const PAGE_READY_POLL_MS = 250;
+
+let pagePreparation = null;
+
 function activeTabId(tab) {
-  if (!tab?.id) {
+  if (tab?.id === undefined || tab?.id === null) {
     throw new Error("active tab is unavailable");
   }
   return tab.id;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
+function isWbsbNewArticleUrl(url) {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    return (
+      parsedUrl.protocol === "https:" &&
+      parsedUrl.hostname === "wbsb.dev" &&
+      parsedUrl.pathname === "/articles/new"
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function waitForTabReady(tabId) {
+  const deadline = Date.now() + PAGE_READY_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const tab = await getTab(tabId);
+    if (isWbsbNewArticleUrl(tab?.url) && tab?.status === "complete") {
+      return tab;
+    }
+    await delay(PAGE_READY_POLL_MS);
+  }
+
+  throw new Error("timed out waiting for WBSB article page to load");
+}
+
+async function prepareWbsbArticlePage() {
+  const activeTab = await queryActiveTab();
+  const tabId = activeTabId(activeTab);
+
+  if (isWbsbNewArticleUrl(activeTab.url) && activeTab.status === "complete") {
+    return tabId;
+  }
+
+  if (!isWbsbNewArticleUrl(activeTab.url)) {
+    await updateTab(tabId, { url: WBSB_NEW_ARTICLE_URL });
+  }
+
+  await waitForTabReady(tabId);
+  return tabId;
+}
+
+export function ensureWbsbArticlePage() {
+  if (!pagePreparation) {
+    pagePreparation = prepareWbsbArticlePage().finally(() => {
+      pagePreparation = null;
+    });
+  }
+  return pagePreparation;
 }
 
 async function executePageScript(tabId, func, args = []) {
@@ -66,7 +134,7 @@ async function writeRawWbsbArticle(tabId, article) {
 }
 
 export async function readWbsbArticle() {
-  const tabId = activeTabId(await queryActiveTab());
+  const tabId = await ensureWbsbArticlePage();
   const rawArticle = await readRawWbsbArticle(tabId);
   if (rawArticle) {
     return rawArticle;
@@ -76,12 +144,12 @@ export async function readWbsbArticle() {
 }
 
 export async function readWbsbArticleTitle() {
-  const tabId = activeTabId(await queryActiveTab());
+  const tabId = await ensureWbsbArticlePage();
   return readRawWbsbArticleTitle(tabId);
 }
 
 export async function writeWbsbArticle(article) {
-  const tabId = activeTabId(await queryActiveTab());
+  const tabId = await ensureWbsbArticlePage();
   await writeRawWbsbArticle(tabId, {
     body: article.body || "",
     title: article.title || "",

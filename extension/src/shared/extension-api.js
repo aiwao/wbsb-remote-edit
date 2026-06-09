@@ -28,6 +28,50 @@ export function queryActiveTab() {
   });
 }
 
+export function getTab(tabId) {
+  const api = extensionApi();
+  if (!api?.tabs?.get) {
+    return Promise.reject(new Error("tabs API is unavailable"));
+  }
+
+  if (globalThis.browser?.tabs?.get) {
+    return api.tabs.get(tabId);
+  }
+
+  return new Promise((resolve, reject) => {
+    api.tabs.get(tabId, (tab) => {
+      const error = api.runtime?.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(tab);
+    });
+  });
+}
+
+export function updateTab(tabId, properties) {
+  const api = extensionApi();
+  if (!api?.tabs?.update) {
+    return Promise.reject(new Error("tabs API is unavailable"));
+  }
+
+  if (globalThis.browser?.tabs?.update) {
+    return api.tabs.update(tabId, properties);
+  }
+
+  return new Promise((resolve, reject) => {
+    api.tabs.update(tabId, properties, (tab) => {
+      const error = api.runtime?.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(tab);
+    });
+  });
+}
+
 export function sendTabMessage(tabId, message) {
   const api = extensionApi();
   if (!api?.tabs?.sendMessage) {

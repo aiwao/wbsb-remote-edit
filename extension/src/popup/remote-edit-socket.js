@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
   endpoint: "remote-edit-endpoint",
 };
 
-export function useRemoteEditSocket({ onMessage }) {
+export function useRemoteEditSocket({ onConnected, onMessage }) {
   const endpoint = ref(DEFAULT_ENDPOINT);
   const autoConnect = ref(false);
   const isConnected = ref(false);
@@ -86,6 +86,11 @@ export function useRemoteEditSocket({ onMessage }) {
         isConnecting.value = false;
         clearRetry();
         appendLog("extension", "connected");
+        Promise.resolve()
+          .then(() => onConnected?.())
+          .catch((error) => {
+            appendLog("extension", toErrorMessage(error));
+          });
         resolve(nextSocket);
       });
 

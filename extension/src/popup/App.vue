@@ -11,7 +11,12 @@ import {
 import { useRemoteEditSocket } from "./remote-edit-socket.js";
 import { toErrorMessage } from "../shared/errors.js";
 import { WS_MESSAGE_TYPES } from "../shared/protocol.js";
-import { readWbsbArticle, readWbsbArticleTitle, writeWbsbArticle } from "./wbsb-page-client.js";
+import {
+  ensureWbsbArticlePage,
+  readWbsbArticle,
+  readWbsbArticleTitle,
+  writeWbsbArticle,
+} from "./wbsb-page-client.js";
 
 const editTitle = ref("No edit yet");
 const editContent = ref("");
@@ -27,7 +32,10 @@ const {
   logEntries,
   dispose,
   sendMessage,
-} = useRemoteEditSocket({ onMessage: handleMessageEvent });
+} = useRemoteEditSocket({
+  onConnected: ensureWbsbArticlePage,
+  onMessage: handleMessageEvent,
+});
 
 function handleMessageEvent(event) {
   let message;
