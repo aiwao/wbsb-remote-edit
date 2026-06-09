@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Nix checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Run Go tests
+        run: nix develop --command go test ./...
+
+      - name: Build packages
+        run: nix build .# -o build/ci
+
+      - name: Lint extension
+        run: nix develop --command web-ext lint --source-dir build/ci/extension --no-input
