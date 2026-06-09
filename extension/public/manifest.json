@@ -6,7 +6,11 @@
     "default_title": "Remote Edit",
     "default_popup": "index.html"
   },
-  "permissions": ["scripting"],
+  "background": {
+    "scripts": ["assets/background.js"],
+    "type": "module"
+  },
+  "permissions": ["scripting", "storage", "tabs"],
   "host_permissions": ["*://wbsb.dev/articles/new*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;"
@@ -17,7 +21,7 @@
       "data_collection_permissions": {
         "required": ["none"]
       },
-      "strict_min_version": "109.0"
+      "strict_min_version": "112.0"
     }
   }
 }

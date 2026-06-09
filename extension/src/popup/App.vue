@@ -1,29 +1,11 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from "vue";
-import {
-  ackMessage,
-  messageText,
-  wbsbArticleErrorMessage,
-  wbsbArticleMessage,
-  wbsbArticleTitleErrorMessage,
-  wbsbArticleTitleMessage,
-} from "./remote-edit-messages.js";
+import { onBeforeUnmount, onMounted } from "vue";
 import { useRemoteEditSocket } from "./remote-edit-socket.js";
-import { toErrorMessage } from "../shared/errors.js";
-import { WS_MESSAGE_TYPES } from "../shared/protocol.js";
-import {
-  ensureWbsbArticlePage,
-  readWbsbArticle,
-  readWbsbArticleTitle,
-  writeWbsbArticle,
-} from "./wbsb-page-client.js";
-
-const editTitle = ref("No edit yet");
-const editContent = ref("");
 
 const {
-  appendLog,
   autoConnect,
+  editContent,
+  editTitle,
   endpoint,
   endpointDisabled,
   handleAutoConnectChange,
@@ -31,82 +13,7 @@ const {
   init,
   logEntries,
   dispose,
-  sendMessage,
-} = useRemoteEditSocket({
-  onConnected: ensureWbsbArticlePage,
-  onMessage: handleMessageEvent,
-});
-
-function handleMessageEvent(event) {
-  let message;
-  try {
-    message = JSON.parse(event.data);
-  } catch {
-    appendLog("CLI", event.data);
-    return;
-  }
-
-  if (message.type === WS_MESSAGE_TYPES.getWbsbArticle) {
-    sendWbsbArticle(message).catch((error) => {
-      appendLog("extension", toErrorMessage(error));
-    });
-  }
-
-  if (message.type === WS_MESSAGE_TYPES.getWbsbArticleTitle) {
-    sendWbsbArticleTitle(message).catch((error) => {
-      appendLog("extension", toErrorMessage(error));
-    });
-  }
-
-  if (message.type === WS_MESSAGE_TYPES.edit) {
-    editTitle.value = message.title || "Untitled";
-    editContent.value = message.body || "";
-    writeWbsbArticle({
-      body: message.body || "",
-      title: message.title || "",
-    })
-      .then(() => {
-        appendLog("WBSB", "inserted edit");
-        sendAck(message);
-      })
-      .catch((error) => {
-        appendLog("extension", toErrorMessage(error));
-      });
-  }
-
-  appendLog(message.from || "CLI", messageText(message));
-}
-
-function sendAck(message) {
-  const ack = ackMessage(message);
-  if (ack) {
-    sendMessage(ack);
-  }
-}
-
-async function sendWbsbArticle(message) {
-  try {
-    const article = await readWbsbArticle();
-    sendMessage(wbsbArticleMessage(message, article));
-    appendLog("WBSB", article.title || "untitled article");
-  } catch (error) {
-    const errorText = toErrorMessage(error);
-    appendLog("extension", errorText);
-    sendMessage(wbsbArticleErrorMessage(message, errorText));
-  }
-}
-
-async function sendWbsbArticleTitle(message) {
-  try {
-    const title = await readWbsbArticleTitle();
-    sendMessage(wbsbArticleTitleMessage(message, title));
-    appendLog("WBSB", title || "untitled article");
-  } catch (error) {
-    const errorText = toErrorMessage(error);
-    appendLog("extension", errorText);
-    sendMessage(wbsbArticleTitleErrorMessage(message, errorText));
-  }
-}
+} = useRemoteEditSocket();
 
 onMounted(() => {
   init();
