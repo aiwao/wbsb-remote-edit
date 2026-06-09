@@ -5,6 +5,8 @@ import { toErrorMessage } from "../shared/errors.js";
 const WBSB_NEW_ARTICLE_URL = "https://wbsb.dev/articles/new";
 const PAGE_READY_TIMEOUT_MS = 30000;
 const PAGE_READY_POLL_MS = 250;
+const WRITABLE_EDITOR_TIMEOUT_MS = 30000;
+const WRITABLE_EDITOR_POLL_MS = 250;
 
 let pagePreparation = null;
 
@@ -121,16 +123,38 @@ async function readRawWbsbArticleTitle(tabId) {
 }
 
 async function writeRawWbsbArticle(tabId, article) {
-  try {
-    const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["write", article]);
-    const writeResult = result?.result;
+  const deadline = Date.now() + WRITABLE_EDITOR_TIMEOUT_MS;
+  let lastError = "could not write WBSB article";
+
+  while (Date.now() < deadline) {
+    let writeResult;
+    try {
+      const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["write", article]);
+      writeResult = result?.result;
+    } catch (error) {
+      throw new Error(`could not write raw WBSB markdown: ${toErrorMessage(error)}`);
+    }
+
     if (writeResult?.ok) {
       return;
     }
-    throw new Error(writeResult?.error || "could not write WBSB article");
-  } catch (error) {
-    throw new Error(`could not write raw WBSB markdown: ${toErrorMessage(error)}`);
+
+    lastError = writeResult?.error || "could not write WBSB article";
+    if (!isEditorReadinessError(lastError)) {
+      throw new Error(`could not write raw WBSB markdown: ${lastError}`);
+    }
+
+    await delay(WRITABLE_EDITOR_POLL_MS);
   }
+
+  throw new Error(`could not write raw WBSB markdown: ${lastError}`);
+}
+
+function isEditorReadinessError(errorText) {
+  return (
+    errorText === "could not find WBSB TipTap Markdown editor state" ||
+    errorText === "title input was not found"
+  );
 }
 
 export async function readWbsbArticle() {
