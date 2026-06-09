@@ -24,6 +24,7 @@ type serverSession struct {
 type editWorkflowOptions struct {
 	addr           string
 	path           string
+	saveTo         string
 	title          string
 	allowedOrigins []string
 	stdout         io.Writer
@@ -70,6 +71,23 @@ func runEditWorkflow(parentCtx context.Context, options editWorkflowOptions) err
 		return stopSessionWithError(session, err)
 	}
 
+	if strings.TrimSpace(options.saveTo) != "" {
+		writtenPath, err := writeLocalArticle(options.saveTo, wsserver.Article{
+			Title: title,
+			Body:  body,
+		})
+		if err != nil {
+			return stopSessionWithError(session, err)
+		}
+		fmt.Fprintf(
+			options.stdout,
+			"saved article %q (%d byte(s)) to %s\n",
+			title,
+			len([]byte(body)),
+			writtenPath,
+		)
+	}
+
 	return sendEditAndStop(ctx, session, options.stdout, title, body)
 }
 
@@ -95,7 +113,7 @@ func runPullWorkflow(parentCtx context.Context, options pullWorkflowOptions) err
 		return stopSessionWithError(session, err)
 	}
 
-	writtenPath, err := writePulledArticle(options.outputPath, article)
+	writtenPath, err := writeLocalArticle(options.outputPath, article)
 	if err != nil {
 		return stopSessionWithError(session, err)
 	}

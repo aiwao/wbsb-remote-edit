@@ -11,7 +11,8 @@ nix develop --command go run ./cmd/wbsb-remote-edit edit
 ```
 
 - `edit` has no positional arguments. Use `--title` to override the article title. If `--title` is not set, the CLI uses the title returned by `get_wbsb_article`.
-- `edit` starts the local WebSocket server, waits for a browser extension connection, sends a `get_wbsb_article` request, opens `$EDITOR` with the returned article body, then sends the edited body back to the extension as an `edit` message.
+- Use `--save-to` to save the edited article body locally. It should share the same local save behavior as `pull`: file paths are written directly, and directory paths use the sanitized article title as `{title}.md`.
+- `edit` starts the local WebSocket server, waits for a browser extension connection, sends a `get_wbsb_article` request, opens `$EDITOR` with the returned article body, optionally saves the edited body locally when `--save-to` is set, then sends the edited body back to the extension as an `edit` message.
 - Use `--editor` to override `$EDITOR`. The editor temp file should use the final title in the pattern `{title}-*.md`; unsafe filename characters should be sanitized before calling `os.CreateTemp`.
 - The WebSocket endpoint defaults to `ws://127.0.0.1:8787/ws`.
 - Message bodies are represented only by `body`. Do not reintroduce a separate `content` field.

@@ -32,6 +32,7 @@ Start editing an article in your favorite text editor.
 * `--title`: The article title.
 * `--editor`: The editor to use. **By default, `$EDITOR` is opened.**
 * `--file`: The Markdown file to use as the editor initial body.
+* `--save-to`: Save the edited Markdown to the specified file or directory.
 
 ### push
 
