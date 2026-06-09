@@ -8,8 +8,10 @@
   },
   "background": {
     "scripts": ["assets/background.js"],
+    "service_worker": "assets/background.js",
     "type": "module"
   },
+  "minimum_chrome_version": "121",
   "permissions": ["scripting", "storage", "tabs"],
   "host_permissions": ["*://wbsb.dev/articles/new*"],
   "content_security_policy": {

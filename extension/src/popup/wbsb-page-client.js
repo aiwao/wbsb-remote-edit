@@ -17,7 +17,7 @@ function activeTabId(tab) {
 
 function delay(milliseconds) {
   return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
+    globalThis.setTimeout(resolve, milliseconds);
   });
 }
 
