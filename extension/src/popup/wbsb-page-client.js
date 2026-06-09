@@ -1,12 +1,82 @@
 import { runWbsbArticlePageAction } from "../wbsb/page-raw-markdown.js";
-import { executeScript, queryActiveTab } from "../shared/extension-api.js";
+import { executeScript, getTab, queryActiveTab, updateTab } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
 
+const WBSB_NEW_ARTICLE_URL = "https://wbsb.dev/articles/new";
+const PAGE_READY_TIMEOUT_MS = 30000;
+const PAGE_READY_POLL_MS = 250;
+const WRITABLE_EDITOR_TIMEOUT_MS = 30000;
+const WRITABLE_EDITOR_POLL_MS = 250;
+
+let pagePreparation = null;
+
 function activeTabId(tab) {
-  if (!tab?.id) {
+  if (tab?.id === undefined || tab?.id === null) {
     throw new Error("active tab is unavailable");
   }
   return tab.id;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, milliseconds);
+  });
+}
+
+function isWbsbNewArticleUrl(url) {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    return (
+      parsedUrl.protocol === "https:" &&
+      parsedUrl.hostname === "wbsb.dev" &&
+      parsedUrl.pathname === "/articles/new"
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function waitForTabReady(tabId) {
+  const deadline = Date.now() + PAGE_READY_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const tab = await getTab(tabId);
+    if (isWbsbNewArticleUrl(tab?.url) && tab?.status === "complete") {
+      return tab;
+    }
+    await delay(PAGE_READY_POLL_MS);
+  }
+
+  throw new Error("timed out waiting for WBSB article page to load");
+}
+
+async function prepareWbsbArticlePage() {
+  const activeTab = await queryActiveTab();
+  const tabId = activeTabId(activeTab);
+
+  if (isWbsbNewArticleUrl(activeTab.url) && activeTab.status === "complete") {
+    return tabId;
+  }
+
+  if (!isWbsbNewArticleUrl(activeTab.url)) {
+    await updateTab(tabId, { url: WBSB_NEW_ARTICLE_URL });
+  }
+
+  await waitForTabReady(tabId);
+  return tabId;
+}
+
+export function ensureWbsbArticlePage() {
+  if (!pagePreparation) {
+    pagePreparation = prepareWbsbArticlePage().finally(() => {
+      pagePreparation = null;
+    });
+  }
+  return pagePreparation;
 }
 
 async function executePageScript(tabId, func, args = []) {
@@ -53,20 +123,42 @@ async function readRawWbsbArticleTitle(tabId) {
 }
 
 async function writeRawWbsbArticle(tabId, article) {
-  try {
-    const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["write", article]);
-    const writeResult = result?.result;
+  const deadline = Date.now() + WRITABLE_EDITOR_TIMEOUT_MS;
+  let lastError = "could not write WBSB article";
+
+  while (Date.now() < deadline) {
+    let writeResult;
+    try {
+      const [result] = await executePageScript(tabId, runWbsbArticlePageAction, ["write", article]);
+      writeResult = result?.result;
+    } catch (error) {
+      throw new Error(`could not write raw WBSB markdown: ${toErrorMessage(error)}`);
+    }
+
     if (writeResult?.ok) {
       return;
     }
-    throw new Error(writeResult?.error || "could not write WBSB article");
-  } catch (error) {
-    throw new Error(`could not write raw WBSB markdown: ${toErrorMessage(error)}`);
+
+    lastError = writeResult?.error || "could not write WBSB article";
+    if (!isEditorReadinessError(lastError)) {
+      throw new Error(`could not write raw WBSB markdown: ${lastError}`);
+    }
+
+    await delay(WRITABLE_EDITOR_POLL_MS);
   }
+
+  throw new Error(`could not write raw WBSB markdown: ${lastError}`);
+}
+
+function isEditorReadinessError(errorText) {
+  return (
+    errorText === "could not find WBSB TipTap Markdown editor state" ||
+    errorText === "title input was not found"
+  );
 }
 
 export async function readWbsbArticle() {
-  const tabId = activeTabId(await queryActiveTab());
+  const tabId = await ensureWbsbArticlePage();
   const rawArticle = await readRawWbsbArticle(tabId);
   if (rawArticle) {
     return rawArticle;
@@ -76,12 +168,12 @@ export async function readWbsbArticle() {
 }
 
 export async function readWbsbArticleTitle() {
-  const tabId = activeTabId(await queryActiveTab());
+  const tabId = await ensureWbsbArticlePage();
   return readRawWbsbArticleTitle(tabId);
 }
 
 export async function writeWbsbArticle(article) {
-  const tabId = activeTabId(await queryActiveTab());
+  const tabId = await ensureWbsbArticlePage();
   await writeRawWbsbArticle(tabId, {
     body: article.body || "",
     title: article.title || "",

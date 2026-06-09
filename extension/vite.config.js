@@ -64,6 +64,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        background: "src/background/main.js",
         index: "index.html",
       },
       output: {
