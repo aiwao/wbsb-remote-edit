@@ -21,16 +21,13 @@ import {
 import { toErrorMessage } from "../shared/errors.js";
 import {
   DEFAULT_REMOTE_EDIT_ENDPOINT,
+  REMOTE_EDIT_STORAGE_KEYS,
   RUNTIME_MESSAGE_TYPES,
   WS_MESSAGE_TYPES,
 } from "../shared/protocol.js";
 
 const RETRY_DELAY_MS = 1500;
 const LOG_LIMIT = 30;
-const STORAGE_KEYS = {
-  autoConnect: "remote-edit-auto-connect",
-  endpoint: "remote-edit-endpoint",
-};
 const RUNTIME_COMMAND_TYPES = new Set([
   RUNTIME_MESSAGE_TYPES.getRemoteEditState,
   RUNTIME_MESSAGE_TYPES.setRemoteEditAutoConnect,
@@ -107,24 +104,24 @@ function sendAck(message) {
 
 async function loadSettings() {
   const items = await getStorage({
-    [STORAGE_KEYS.autoConnect]: false,
-    [STORAGE_KEYS.endpoint]: DEFAULT_REMOTE_EDIT_ENDPOINT,
+    [REMOTE_EDIT_STORAGE_KEYS.autoConnect]: false,
+    [REMOTE_EDIT_STORAGE_KEYS.endpoint]: DEFAULT_REMOTE_EDIT_ENDPOINT,
   });
 
-  const storedEndpoint = items[STORAGE_KEYS.endpoint];
+  const storedEndpoint = items[REMOTE_EDIT_STORAGE_KEYS.endpoint];
   state.endpoint =
     typeof storedEndpoint === "string" && storedEndpoint.trim()
       ? storedEndpoint.trim()
       : DEFAULT_REMOTE_EDIT_ENDPOINT;
 
-  const storedAutoConnect = items[STORAGE_KEYS.autoConnect];
+  const storedAutoConnect = items[REMOTE_EDIT_STORAGE_KEYS.autoConnect];
   state.autoConnect = storedAutoConnect === true || storedAutoConnect === "true";
 }
 
 function saveSettings() {
   return setStorage({
-    [STORAGE_KEYS.autoConnect]: state.autoConnect,
-    [STORAGE_KEYS.endpoint]: state.endpoint.trim(),
+    [REMOTE_EDIT_STORAGE_KEYS.autoConnect]: state.autoConnect,
+    [REMOTE_EDIT_STORAGE_KEYS.endpoint]: state.endpoint.trim(),
   });
 }
 

@@ -1,13 +1,13 @@
 import { computed, ref } from "vue";
 import { addRuntimeMessageListener, sendRuntimeMessage } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
-import { DEFAULT_REMOTE_EDIT_ENDPOINT, RUNTIME_MESSAGE_TYPES } from "../shared/protocol.js";
+import {
+  DEFAULT_REMOTE_EDIT_ENDPOINT,
+  REMOTE_EDIT_STORAGE_KEYS,
+  RUNTIME_MESSAGE_TYPES,
+} from "../shared/protocol.js";
 
 const LOG_LIMIT = 30;
-const STORAGE_KEYS = {
-  autoConnect: "remote-edit-auto-connect",
-  endpoint: "remote-edit-endpoint",
-};
 
 export function useRemoteEditSocket() {
   const endpoint = ref(DEFAULT_REMOTE_EDIT_ENDPOINT);
@@ -37,8 +37,8 @@ export function useRemoteEditSocket() {
 
   function saveLocalSettings() {
     try {
-      localStorage.setItem(STORAGE_KEYS.autoConnect, String(autoConnect.value));
-      localStorage.setItem(STORAGE_KEYS.endpoint, endpoint.value.trim());
+      localStorage.setItem(REMOTE_EDIT_STORAGE_KEYS.autoConnect, String(autoConnect.value));
+      localStorage.setItem(REMOTE_EDIT_STORAGE_KEYS.endpoint, endpoint.value.trim());
     } catch {
       // Popup-local settings are convenience state only.
     }
@@ -46,11 +46,11 @@ export function useRemoteEditSocket() {
 
   function loadLocalSettings() {
     try {
-      const storedEndpoint = localStorage.getItem(STORAGE_KEYS.endpoint);
+      const storedEndpoint = localStorage.getItem(REMOTE_EDIT_STORAGE_KEYS.endpoint);
       if (storedEndpoint) {
         endpoint.value = storedEndpoint;
       }
-      autoConnect.value = localStorage.getItem(STORAGE_KEYS.autoConnect) === "true";
+      autoConnect.value = localStorage.getItem(REMOTE_EDIT_STORAGE_KEYS.autoConnect) === "true";
     } catch {
       autoConnect.value = false;
     }

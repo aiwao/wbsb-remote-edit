@@ -20,3 +20,8 @@ export const RUNTIME_MESSAGE_TYPES = Object.freeze({
 });
 
 export const DEFAULT_REMOTE_EDIT_ENDPOINT = "ws://127.0.0.1:8787/ws";
+
+export const REMOTE_EDIT_STORAGE_KEYS = Object.freeze({
+  autoConnect: "remote-edit-auto-connect",
+  endpoint: "remote-edit-endpoint",
+});
