@@ -1,7 +1,8 @@
 export function runWbsbArticlePageAction(action, article) {
   const MAX_NODES = 3000;
   const MAX_OBJECTS = 5000;
-  const ARTICLE_MATCH = "*://wbsb.dev/articles/new*";
+  const ARTICLE_MATCH = "*://wbsb.dev/articles/new* or *://wbsb.dev/articles/*/edit*";
+  const EDIT_ARTICLE_PATH_PATTERN = /^\/articles\/[^/]+\/edit$/;
   const TITLE_XPATH = "/html/body/div[1]/main/div/div/div[2]/div[3]/input";
   const REACT_PROPERTY_PATTERN = /^__(reactFiber|reactProps|reactContainer)\$/;
   const NOT_FOUND = Symbol("not found");
@@ -11,7 +12,7 @@ export function runWbsbArticlePageAction(action, article) {
     return (
       (location?.protocol === "http:" || location?.protocol === "https:") &&
       location.hostname === "wbsb.dev" &&
-      location.pathname === "/articles/new"
+      (location.pathname === "/articles/new" || EDIT_ARTICLE_PATH_PATTERN.test(location.pathname))
     );
   }
 

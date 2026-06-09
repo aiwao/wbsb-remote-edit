@@ -3,6 +3,7 @@ import { executeScript, getTab, queryActiveTab, updateTab } from "../shared/exte
 import { toErrorMessage } from "../shared/errors.js";
 
 const WBSB_NEW_ARTICLE_URL = "https://wbsb.dev/articles/new";
+const WBSB_EDIT_ARTICLE_PATH_PATTERN = /^\/articles\/[^/]+\/edit$/;
 const PAGE_READY_TIMEOUT_MS = 30000;
 const PAGE_READY_POLL_MS = 250;
 const WRITABLE_EDITOR_TIMEOUT_MS = 30000;
@@ -23,7 +24,7 @@ function delay(milliseconds) {
   });
 }
 
-function isWbsbNewArticleUrl(url) {
+function isWbsbArticleEditorUrl(url) {
   if (!url) {
     return false;
   }
@@ -33,7 +34,8 @@ function isWbsbNewArticleUrl(url) {
     return (
       parsedUrl.protocol === "https:" &&
       parsedUrl.hostname === "wbsb.dev" &&
-      parsedUrl.pathname === "/articles/new"
+      (parsedUrl.pathname === "/articles/new" ||
+        WBSB_EDIT_ARTICLE_PATH_PATTERN.test(parsedUrl.pathname))
     );
   } catch {
     return false;
@@ -45,7 +47,7 @@ async function waitForTabReady(tabId) {
 
   while (Date.now() < deadline) {
     const tab = await getTab(tabId);
-    if (isWbsbNewArticleUrl(tab?.url) && tab?.status === "complete") {
+    if (isWbsbArticleEditorUrl(tab?.url) && tab?.status === "complete") {
       return tab;
     }
     await delay(PAGE_READY_POLL_MS);
@@ -58,11 +60,11 @@ async function prepareWbsbArticlePage() {
   const activeTab = await queryActiveTab();
   const tabId = activeTabId(activeTab);
 
-  if (isWbsbNewArticleUrl(activeTab.url) && activeTab.status === "complete") {
+  if (isWbsbArticleEditorUrl(activeTab.url) && activeTab.status === "complete") {
     return tabId;
   }
 
-  if (!isWbsbNewArticleUrl(activeTab.url)) {
+  if (!isWbsbArticleEditorUrl(activeTab.url)) {
     await updateTab(tabId, { url: WBSB_NEW_ARTICLE_URL });
   }
 

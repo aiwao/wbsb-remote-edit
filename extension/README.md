@@ -2,7 +2,7 @@
 
 Manifest V3 browser extension popup for `wbsb-remote-edit`, built with pnpm, Vite+, and Vue 3.
 
-The popup reads the current article only on `*://wbsb.dev/articles/new`, using wbsb's TipTap Markdown state for the article body. The bundled content script writes edited Markdown back to the wbsb editor.
+The popup reads the current article on `*://wbsb.dev/articles/new*` and `*://wbsb.dev/articles/*/edit*`, using wbsb's TipTap Markdown state for the article body. The bundled page script writes edited Markdown back to the wbsb editor.
 
 ## Commands
 

@@ -254,6 +254,76 @@ describe("readWbsbArticleFromPage", () => {
     ]);
   });
 
+  it("writes markdown on an existing article edit page", () => {
+    globalThis.Event = class {
+      constructor(type) {
+        this.type = type;
+      }
+    };
+    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
+    setArticleLocation("/articles/article-1/edit");
+
+    const setContentCalls = [];
+    const tiptapEditor = {
+      commands: {
+        setContent: (markdown, options) => {
+          setContentCalls.push({ markdown, options });
+          return true;
+        },
+      },
+      getMarkdown: () => "",
+    };
+    const editorNode = node({ className: "ProseMirror" });
+    Object.defineProperty(editorNode, "__reactProps$test", {
+      value: {
+        editor: tiptapEditor,
+      },
+    });
+    globalThis.document = documentWith({
+      nodes: [editorNode],
+      title: "Existing Title",
+    });
+
+    const result = writeWbsbArticleToPage({
+      body: "updated markdown",
+      title: "",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      strategy: "tiptap-markdown-content-type",
+    });
+    expect(setContentCalls).toEqual([
+      {
+        markdown: "updated markdown",
+        options: {
+          contentType: "markdown",
+          emitUpdate: true,
+        },
+      },
+    ]);
+  });
+
+  it("refuses to write outside WBSB article editor pages", () => {
+    globalThis.Event = class {
+      constructor(type) {
+        this.type = type;
+      }
+    };
+    globalThis.XPathResult = { FIRST_ORDERED_NODE_TYPE: 9 };
+    setArticleLocation("/articles/article-1");
+    globalThis.document = documentWith({
+      nodes: [node({ className: "ProseMirror" })],
+      title: "",
+    });
+
+    expect(writeWbsbArticleToPage({ body: "body", title: "" })).toEqual({
+      error:
+        "this extension only writes *://wbsb.dev/articles/new* or *://wbsb.dev/articles/*/edit*",
+      ok: false,
+    });
+  });
+
   it("returns ok false when no writable TipTap editor is visible", () => {
     globalThis.Event = class {
       constructor(type) {
