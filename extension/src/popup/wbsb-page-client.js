@@ -1,4 +1,4 @@
-import { runWbsbArticlePageAction } from "../wbsb/page-raw-markdown.js";
+import { runWbsbArticlePageAction } from "../wbsb/page-article-reader.js";
 import { executeScript, getTab, queryActiveTab, updateTab } from "../shared/extension-api.js";
 import { toErrorMessage } from "../shared/errors.js";
 
