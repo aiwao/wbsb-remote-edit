@@ -4,7 +4,7 @@ import {
   readWbsbArticleTitleFromPage,
   runWbsbArticlePageAction,
   writeWbsbArticleToPage,
-} from "./page-raw-markdown.js";
+} from "./page-article-reader.js";
 
 const originalDocument = globalThis.document;
 const originalEvent = globalThis.Event;
